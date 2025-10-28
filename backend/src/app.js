@@ -4,8 +4,8 @@ const cors = require('cors');
 const morgan = require('morgan');
 require('dotenv').config();
 
-const { buscar } = require('./src/controllers/searchController');
-const { query }  = require('./src/db/sqlserver');
+const { buscar } = require('./controllers/searchController');
+const { query }  = require('./db/sqlserver');
 
 const app = express();
 
