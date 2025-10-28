@@ -18,7 +18,7 @@ module.exports.buscar = async (req, res, next) => {
     if (barcode) {
       modo = 'barcode'; filtroTexto = barcode;
       sqlText = `
-        SELECT TOP 50 Referencia, Nombre, PrecioDetal, CostoDolar, ${BARCODE_COL} AS CodigoBarra
+        SELECT TOP 50 Referencia, Nombre, PrecioDetal, CostoInicial, ${BARCODE_COL} AS CodigoBarra
         FROM dbo.INVENTARIO
         WHERE ${BARCODE_COL} = @barcode
         ORDER BY Referencia`;
@@ -26,7 +26,7 @@ module.exports.buscar = async (req, res, next) => {
     } else if (referencia) {
       modo = 'referencia'; filtroTexto = referencia;
       sqlText = `
-        SELECT TOP 50 Referencia, Nombre, PrecioDetal, CostoDolar, ${BARCODE_COL} AS CodigoBarra
+        SELECT TOP 50 Referencia, Nombre, PrecioDetal, CostoInicial, ${BARCODE_COL} AS CodigoBarra
         FROM dbo.INVENTARIO
         WHERE Referencia LIKE @filtro
         ORDER BY Referencia`;

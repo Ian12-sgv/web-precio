@@ -29,8 +29,8 @@ export default function Detalle() {
       <div className="row" style={{display:'grid', gridTemplateColumns:'180px 1fr', gap:'8px 12px', marginTop:8}}>
         <div><strong>Referencia</strong></div><div>{item.Referencia}</div>
         <div><strong>Código barras</strong></div><div>{item.CodigoBarra || '—'}</div>
-        <div><strong>Costo Dólar</strong></div><div>{item.CostoDolar}</div>
-        <div><strong>Costo Dólar</strong></div><div>{item.PrecioDetal}</div>
+        <div><strong>Costo Dólar</strong></div><div>{item.CostoInicial}</div>
+        <div><strong>Precio bolivares</strong></div><div>{item.PrecioDetal}</div>
       </div>
      
 
