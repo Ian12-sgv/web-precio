@@ -1,0 +1,23 @@
+{
+  "name": "blumer-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "src/app.js",
+  "scripts": {
+    "dev": "nodemon app.js",
+    "start": "node src/app.js"
+  },
+  "dependencies": {
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "morgan": "^1.10.0",
+    "mssql": "^10.0.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}

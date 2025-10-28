@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8">
+<title>Buscador</title>
+<input id="bc" placeholder="Código de barras"><button id="go">Buscar</button>
+<pre id="out"></pre>
+<script>
+document.getElementById('go').onclick = async () => {
+  const bc = document.getElementById('bc').value.trim();
+  const r  = await fetch('/api/buscar?barcode='+encodeURIComponent(bc));
+  document.getElementById('out').textContent = JSON.stringify(await r.json(), null, 2);
+};
+</script>

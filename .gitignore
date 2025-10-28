@@ -1,0 +1,51 @@
+# --- SO / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+
+# --- Node / JS ---
+**/node_modules/
+**/coverage/
+**/.eslintcache
+**/.turbo/
+**/.cache/
+**/.parcel-cache/
+**/.vite/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --- Builds (Vite/React y similares) ---
+**/dist/
+**/build/
+**/storybook-static/
+
+# --- Entornos (mantén solo .env.example) ---
+**/.env
+**/.env.*
+!**/.env.example
+
+# --- Netlify ---
+.netlify/
+# (NO ignores netlify.toml: se versiona)
+
+# --- TypeScript ---
+*.tsbuildinfo
+
+# --- Misceláneos ---
+*.pid
+*.pid.lock
+*.seed
+*.tgz
+*.gz
+*.zip
+*.bak
+*.swp
+
+# --- Bases de datos locales ---
+*.sqlite
+*.sqlite3
+*.db
