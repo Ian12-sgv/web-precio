@@ -60,6 +60,7 @@ export default function Scan() {
     return dbDown ? 'Fallo al consultar la base de datos' : 'Fallo en la consulta al servidor';
   }
 
+  // Enumerar cámaras
   useEffect(() => {
     (async () => {
       try {
@@ -80,16 +81,19 @@ export default function Scan() {
     })();
   }, []);
 
+  // Autostart con pequeño retardo para que el SO libere la cámara
   useEffect(() => {
     if (!hasAutoStart) return;
     params.delete('autostart');
     setParams(params, { replace: true });
-    setReadyAt(Date.now() + 1200);        // ⏳ 1.2s de gracia para evitar “doble lectura”
-    handleStart().catch(()=>{});
+    setReadyAt(Date.now() + 1200); // ⏳ ventana para evitar lecturas dobles
+    setTimeout(() => {             // ⌛ 350ms ayuda a evitar NotReadable/Abort en móviles
+      handleStart().catch(()=>{});
+    }, 350);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 🧹 detén la cámara al desmontar (evita “no se pudo enumerar…”)
+  // 🧹 Detener la cámara al desmontar
   useEffect(() => {
     return () => {
       (async () => {
@@ -207,7 +211,8 @@ export default function Scan() {
       await startCamera(sel?.value);
     } catch (e) {
       console.error('startCamera error:', e);
-      showAlert(`No se pudo iniciar la cámara: ${e.name || e.message || 'Error'}`, 'error');
+      const msg = e?.name ? `${e.name}: ${e.message || ''}` : (e?.message || 'Error');
+      showAlert(`No se pudo iniciar la cámara: ${msg}`, 'error');
     }
   }
 
