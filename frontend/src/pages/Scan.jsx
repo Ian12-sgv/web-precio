@@ -1,20 +1,34 @@
+// src/pages/Scan.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiBuscar } from '../lib/api';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 function Alert({ msg, kind = 'error', onHide }) {
   if (!msg) return null;
+  const icon = kind === 'ok' ? '✅' : kind === 'warn' ? '⚠️' : '❌';
   return (
-    <div className={`alert ${kind === 'ok' ? 'alert--ok' : 'alert--error'}`} role="alert">
-      {msg}
-      <div style={{ marginTop: 6 }}>
-        <button className="btn-ghost" onClick={onHide}>Cerrar</button>
-      </div>
+    <div
+      className={`alert ${kind === 'ok' ? 'alert--ok' : kind === 'warn' ? 'alert--warn' : 'alert--error'}`}
+      role="alert"
+      style={{
+        borderRadius: 12,
+        padding: '12px 14px',
+        lineHeight: 1.4,
+        boxShadow: '0 6px 18px rgba(0,0,0,.12)',
+        display: 'flex',
+        alignItems: 'start',
+        gap: 10
+      }}
+    >
+      <div style={{ fontSize: 22, lineHeight: 1 }}>{icon}</div>
+      <div style={{ flex: 1 }}>{msg}</div>
+      <button className="btn-ghost" onClick={onHide} style={{ marginLeft: 8 }}>
+        Cerrar
+      </button>
     </div>
   );
 }
-
-const LAST_CAMERA_KEY = 'scan.lastCameraId';
 
 export default function Scan() {
   const nav = useNavigate();
@@ -22,21 +36,70 @@ export default function Scan() {
 
   const readerRef = useRef(null);
   const imgRef    = useRef(null);
-
-  const autostart = params.get('autostart') === '1';
-  const ignore    = params.get('ignore') || '';
+  const selectRef = useRef(null);
 
   const [html5QrCode, setHtml5QrCode] = useState(null);
-  const [devices, setDevices] = useState([]);
-  const [selectedId, setSelectedId] = useState('');
   const [started, setStarted] = useState(false);
+
+  // 🔒 anti-duplicados y ventana de gracia
+  const inFlightRef  = useRef(false);                  // evita 2 fetch en paralelo
+  const lastScanRef  = useRef({ code: '', t: 0 });     // evita repetir por 1.5s
+  const [readyAt, setReadyAt] = useState(0);           // ignora lecturas en arranque
+
   const [alert, setAlert] = useState('');
+  const [alertKind, setAlertKind] = useState('error');
 
-  const [readyAt, setReadyAt] = useState(0);         // ventana de gracia
-  const readingLockRef  = useRef(false);             // evita doble navegación
-  const startingLockRef = useRef(false);             // evita doble start()
+  const hasAutoStart = params.get('autostart') === '1';
 
-  // Coloca el contenedor del lector en el hero (mismo ancho que la imagen)
+  const showAlert = (msg, kind = 'error') => { setAlert(msg); setAlertKind(kind); };
+  const hideAlert = () => setAlert('');
+
+  function mapApiProblem(json) {
+    const txt = (json?.error || json?.message || '').toString();
+    const dbDown = json?.db === 'down' || /db|database|sql|sqlserver|mssql/i.test(txt);
+    return dbDown ? 'Fallo al consultar la base de datos' : 'Fallo en la consulta al servidor';
+  }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        const sel = selectRef.current;
+        if (!sel) return;
+        if (!devices?.length) {
+          sel.innerHTML = '<option>No hay cámaras</option>';
+          return;
+        }
+        sel.innerHTML = devices.map(d => `<option value="${d.id}">${d.label || 'Cámara'}</option>`).join('');
+        const back = devices.find(d => /back|trás|rear|environment/i.test(d.label || ''));
+        sel.value = back ? back.id : devices[0].id;
+      } catch (e) {
+        console.error('getCameras error:', e);
+        showAlert('No se pudo enumerar las cámaras del dispositivo', 'warn');
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!hasAutoStart) return;
+    params.delete('autostart');
+    setParams(params, { replace: true });
+    setReadyAt(Date.now() + 1200);        // ⏳ 1.2s de gracia para evitar “doble lectura”
+    handleStart().catch(()=>{});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 🧹 detén la cámara al desmontar (evita “no se pudo enumerar…”)
+  useEffect(() => {
+    return () => {
+      (async () => {
+        try {
+          if (html5QrCode?.isScanning) await html5QrCode.stop();
+        } catch {}
+      })();
+    };
+  }, [html5QrCode]);
+
   function placeReaderInHero() {
     const reader = readerRef.current;
     const img = imgRef.current;
@@ -50,211 +113,167 @@ export default function Scan() {
     reader.setAttribute('aria-hidden','false');
   }
 
-  // Enumerar cámaras (con pre-permiso) y autostart opcional
-  useEffect(() => {
-    let alive = true;
+  async function startCamera(deviceId) {
+    placeReaderInHero();
 
-    (async () => {
-      try {
-        if (!window.Html5Qrcode) {
-          setAlert('No se encontró Html5Qrcode. Asegúrate de incluir la librería html5-qrcode.');
-          return;
-        }
+    let h = html5QrCode;
+    if (!h) {
+      h = new Html5Qrcode('reader');
+      setHtml5QrCode(h);
+    } else if (h.isScanning) {
+      try { await h.stop(); } catch {}
+    }
 
-        // "Preflight" para permisos: pide acceso y suelta de inmediato
-        try {
-          const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-          s.getTracks().forEach(t => t.stop());
-        } catch {
-          // si el usuario cancela, getCameras puede fallar
-        }
+    const cameraSelector =
+      deviceId && typeof deviceId === 'string'
+        ? deviceId
+        : { facingMode: 'environment' };
 
-        const cams = await window.Html5Qrcode.getCameras();
-        if (!alive) return;
-
-        setDevices(cams || []);
-        if (!cams?.length) {
-          setAlert('No hay cámaras disponibles en este dispositivo.');
-          return;
-        }
-
-        // Elegir: última usada -> trasera -> primera
-        const saved = localStorage.getItem(LAST_CAMERA_KEY);
-        const back  = cams.find(d => /back|rear|environment|trás/i.test(d.label || ''));
-        const chosen = cams.find(d => d.id === saved)?.id || back?.id || cams[0].id;
-        setSelectedId(chosen);
-
-        // Autostart seguro (evita re-lectura inmediata)
-        if (autostart) {
-          setReadyAt(Date.now() + 1200); // 1.2s de gracia
-          params.delete('autostart');
-          setParams(params, { replace: true });
-          await handleStart(chosen);
-        }
-      } catch (e) {
-        if (!alive) return;
-        setAlert('No se pudo enumerar las cámaras. Cierra otras apps que usen la cámara y vuelve a intentar.');
-      }
-    })();
-
-    return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Limpieza al salir: detener y liberar cámara
-  useEffect(() => {
-    return () => {
-      (async () => {
-        try {
-          if (html5QrCode?.isScanning) await html5QrCode.stop();
-          if (html5QrCode) await html5QrCode.clear();
-        } catch {}
-      })();
-    };
-  }, [html5QrCode]);
-
-  async function handleStart(preferredId) {
-    if (startingLockRef.current) return;
-    startingLockRef.current = true;
-
-    try {
-      placeReaderInHero();
-
-      let h = html5QrCode;
-      if (!h) {
-        h = new window.Html5Qrcode('reader');
-        setHtml5QrCode(h);
-      } else if (h.isScanning) {
-        await h.stop();
-      }
-
-      const target = (preferredId || selectedId)
-        ? { deviceId: { exact: preferredId || selectedId } }
-        : { facingMode: { exact: 'environment' } };
-
-      const config = {
+    await h.start(
+      cameraSelector,
+      {
         fps: 15,
         qrbox: 280,
         formatsToSupport: [
-          window.Html5QrcodeSupportedFormats.QR_CODE,
-          window.Html5QrcodeSupportedFormats.CODE_128,
-          window.Html5QrcodeSupportedFormats.EAN_13,
-          window.Html5QrcodeSupportedFormats.EAN_8,
-          window.Html5QrcodeSupportedFormats.UPC_A,
-          window.Html5QrcodeSupportedFormats.CODE_39,
-          window.Html5QrcodeSupportedFormats.ITF
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.ITF
         ]
-      };
-
-      await h.start(target, config, onCode, () => {});
-      localStorage.setItem(LAST_CAMERA_KEY, preferredId || selectedId || '');
-      setStarted(true);
-      setAlert('');
-    } catch (e) {
-      setStarted(false);
-      setAlert('No se pudo abrir la cámara. Verifica permisos y que no esté en uso.');
-    } finally {
-      startingLockRef.current = false;
-    }
-  }
-
-  async function handleChangeCamera(e) {
-    const id = e.target.value;
-    setSelectedId(id);
-    if (started) {
-      await handleStart(id);
-    }
+      },
+      onCode,
+      () => {}
+    );
+    setStarted(true);
   }
 
   async function onCode(text) {
-    // ventana de gracia + ignora el último código para evitar rebote a Detalle
+    // ⛔ ignora lecturas durante la ventana de arranque
     if (Date.now() < readyAt) return;
-    if (ignore && text === ignore) return;
-    if (readingLockRef.current) return;
-    readingLockRef.current = true;
+
+    // ⛔ evita peticiones concurrentes y repeticiones en <1.5s
+    const now = Date.now();
+    if (inFlightRef.current) return;
+    if (lastScanRef.current.code === text && (now - lastScanRef.current.t) < 1500) return;
+    inFlightRef.current = true;
+    lastScanRef.current = { code: text, t: now };
+
+    // ⏸️ pausa el escáner mientras consultas (evita múltiples callbacks)
+    try { await html5QrCode?.pause?.(true); } catch {}
 
     try {
-      const payload = /^\d+$/.test(text) ? { one: 1, barcode: text } : { one: 1, referencia: text };
-      const json = await apiBuscar(payload);
-      const rows = (json && json.ok && Array.isArray(json.data)) ? json.data : [];
-      if (!rows.length) {
-        setAlert('Código no encontrado');
-        readingLockRef.current = false;
+      const json = await apiBuscar({ one:1, ...( /^\d+$/.test(text) ? {barcode:text} : {referencia:text} ) });
+
+      if (!json || json.ok === false) {
+        showAlert(mapApiProblem(json || {}), 'error');
+        inFlightRef.current = false;
+        try { await html5QrCode?.resume?.(); } catch {}
         return;
       }
 
-      // Detener escáner antes de navegar
+      const rows = (Array.isArray(json.data) ? json.data : []);
+      if (!rows.length) {
+        showAlert('Código de barra no encontrado', 'warn');
+        inFlightRef.current = false;
+        try { await html5QrCode?.resume?.(); } catch {}
+        return;
+      }
+
+      // ✅ parar antes de navegar para que no dispare otro onCode
       try { await html5QrCode?.stop(); } catch {}
 
       const row = rows[0];
       if (row.Referencia) nav(`/detalle?referencia=${encodeURIComponent(row.Referencia)}`);
       else if (row.CodigoBarra) nav(`/detalle?barcode=${encodeURIComponent(row.CodigoBarra)}`);
       else nav(`/detalle?referencia=${encodeURIComponent(text)}`);
+    } catch (e) {
+      console.error('apiBuscar error:', e);
+      showAlert('Fallo en la consulta al servidor', 'error');
+      inFlightRef.current = false;
+      try { await html5QrCode?.resume?.(); } catch {}
+    }
+  }
+
+  async function handleStart() {
+    const sel = selectRef.current;
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('El navegador requiere HTTPS/permiso para la cámara');
+      }
+      setReadyAt(Date.now() + 600); // pequeña gracia al reiniciar manualmente
+      await startCamera(sel?.value);
+    } catch (e) {
+      console.error('startCamera error:', e);
+      showAlert(`No se pudo iniciar la cámara: ${e.name || e.message || 'Error'}`, 'error');
+    }
+  }
+
+  async function handleChangeCamera(e) {
+    if (!started) return;
+    try { await startCamera(e.target.value); }
+    catch { showAlert('No se pudo cambiar la cámara', 'warn'); }
+  }
+
+  async function handleManualSearch(value) {
+    const texto = (value||'').trim();
+    if (!texto) return;
+    try {
+      const json = await apiBuscar({ one:1, ...( /^\d+$/.test(texto) ? {barcode:texto} : {referencia:texto} ) });
+
+      if (!json || json.ok === false) {
+        showAlert(mapApiProblem(json || {}), 'error');
+        return;
+      }
+
+      const rows = json?.data || [];
+      if (!rows.length) {
+        showAlert('Código de barra no encontrado', 'warn');
+        return;
+      }
+
+      const row = rows[0];
+      if (row.Referencia) nav(`/detalle?referencia=${encodeURIComponent(row.Referencia)}`);
+      else if (row.CodigoBarra) nav(`/detalle?barcode=${encodeURIComponent(row.CodigoBarra)}`);
     } catch {
-      setAlert('Error consultando el servidor');
-      readingLockRef.current = false;
+      showAlert('Fallo en la consulta al servidor', 'error');
     }
   }
 
   return (
     <>
-      {alert && <Alert msg={alert} onHide={() => setAlert('')} />}
+      <Alert msg={alert} kind={alertKind} onHide={hideAlert} />
 
       <section id="pane-scan" className="pane is-visible" role="region" aria-label="Escanear o ingresar código">
         <div className="hero card">
           <div className="hero__body">
             <h2 className="hero__title">Apunta al código</h2>
 
-            {/* Placeholder: será reemplazado por el lector */}
-            <img
-              ref={imgRef}
-              className="scan-illustration"
-              src="/svg/barcode.jpeg"
-              alt="Ilustración: escanea el código de barras"
-              style={{ width: '100%', maxWidth: 420 }}
-            />
+            <img ref={imgRef} className="scan-illustration" src="/svg/barcode.jpeg" alt="Ilustración: escanea el código de barras" />
 
-            <div className="controls" style={{ marginTop: 8 }}>
-              <label className="visualmente-oculto" htmlFor="cameraSelect">Cámara</label>
-              <select
-                id="cameraSelect"
-                title="Cámara"
-                value={selectedId}
-                onChange={handleChangeCamera}
-              >
-                {devices.length === 0 && <option value="">(No hay cámaras)</option>}
-                {devices.map(d => (
-                  <option key={d.id} value={d.id}>{d.label || 'Cámara'}</option>
-                ))}
-              </select>
+            <div className="controls" style={{marginTop:8}}>
+              <label className="visually-hidden" htmlFor="cameraSelect">Cámara</label>
+              <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
               <button id="btn-torch" disabled>Linterna</button>
             </div>
 
-            <div className="hero__actions" style={{ gap: 10, flexDirection: 'column', alignItems: 'flex-start' }}>
-              <button id="btn-start" className="btn-primary" onClick={() => handleStart()}>
-                {started ? 'Reiniciar escaneo' : 'Iniciar escaneo'}
+            <div className="hero__actions" style={{gap:10, flexDirection:'column', alignItems:'flex-start'}}>
+              <button id="btn-start" className="btn-primary" onClick={handleStart}>
+                Iniciar escaneo
               </button>
 
-              <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 420 }}>
-                <input
-                  id="manual-text"
+              <div style={{display:'flex', gap:8, width:'100%', maxWidth:420}}>
+                <input id="manual-text"
                   className="input-lg"
-                  type="search"
-                  inputMode="text"
-                  enterKeyHint="search"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck="false"
+                  type="search" inputMode="text" enterKeyHint="search"
+                  autoCapitalize="none" autoCorrect="off" spellCheck="false"
                   placeholder="Escribe referencia o código y presiona Enter"
-                  onKeyDown={(e) => e.key === 'Enter' && onCode(e.currentTarget.value)}
-                  style={{ flex: 1 }}
-                />
-                <button
-                  id="btn-manual"
-                  className="btn-primary"
-                  type="button"
-                  onClick={() => onCode(document.getElementById('manual-text').value)}
-                >
+                  onKeyDown={(e)=> e.key==='Enter' && handleManualSearch(e.currentTarget.value)}
+                  style={{flex:1}} />
+                <button id="btn-manual" className="btn-primary" type="button"
+                        onClick={()=>handleManualSearch(document.getElementById('manual-text').value)}>
                   Buscar
                 </button>
               </div>
@@ -262,7 +281,7 @@ export default function Scan() {
           </div>
         </div>
 
-        <div id="reader" ref={readerRef} className="card reader" hidden aria-hidden="true" />
+        <div id="reader" ref={readerRef} className="card reader" hidden aria-hidden="true"></div>
       </section>
     </>
   );
