@@ -56,18 +56,16 @@ export default function Detalle() {
 
       <div className="actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
         {/* Opción A: Link directo */}
-        <Link className="btn-ghost" to="/scan?autostart=1" replace>
+        <Link className="btn-ghost" to="/scan" replace>
           Escanear otro producto
         </Link>
+
 
         {/* Opción B: botón programático (idéntico efecto) */}
         {/* <button className="btn-ghost" onClick={() => navigate('/scan?autostart=1', { replace: true })}>
           Escanear otro producto
         </button> */}
       </div>
-      <Link className="btn-ghost" to="/scan?autostart=1" replace>
-          Escanear otro producto
-        </Link>
     </div>
   );
 }
