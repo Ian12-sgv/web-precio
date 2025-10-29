@@ -65,6 +65,9 @@ export default function Detalle() {
           Escanear otro producto
         </button> */}
       </div>
+      <Link className="btn-ghost" to="/scan?autostart=1" replace>
+          Escanear otro producto
+        </Link>
     </div>
   );
 }
