@@ -21,14 +21,14 @@ function Alert({ msg, kind = 'error', onHide }) {
 
 export default function Scan() {
   const readerRef = useRef(null);
-  const imgRef    = useRef(null);
-  const selectRef = useRef(null);
 
   const [html5QrCode, setHtml5QrCode] = useState(null);
   const [started, setStarted] = useState(false);
   const [needsGesture, setNeedsGesture] = useState(false);
+  const [devices, setDevices] = useState([]);
+  const [selectedId, setSelectedId] = useState('');
 
-  // anti-duplicados
+  // anti-duplicados / timing
   const inFlightRef  = useRef(false);
   const lastScanRef  = useRef({ code: '', t: 0 });
   const [readyAt, setReadyAt] = useState(0);
@@ -36,7 +36,7 @@ export default function Scan() {
   // UI
   const [alert, setAlert] = useState('');
   const [alertKind, setAlertKind] = useState('error');
-  const [detail, setDetail] = useState(null); // ← aquí guardamos el ítem para el overlay
+  const [detail, setDetail] = useState(null);
 
   const showAlert = (msg, kind = 'error') => { setAlert(msg); setAlertKind(kind); };
   const hideAlert = () => setAlert('');
@@ -47,20 +47,18 @@ export default function Scan() {
     return dbDown ? 'Fallo al consultar la base de datos' : 'Fallo en la consulta al servidor';
   }
 
-  // Enumerar cámaras
+  // 1) Enumerar cámaras y elegir trasera si existe
   useEffect(() => {
     (async () => {
       try {
-        const devices = await Html5Qrcode.getCameras();
-        const sel = selectRef.current;
-        if (!sel) return;
-        if (!devices?.length) {
-          sel.innerHTML = '<option>No hay cámaras</option>';
+        const cams = await Html5Qrcode.getCameras();
+        setDevices(cams || []);
+        if (!cams?.length) {
+          showAlert('No hay cámaras disponibles en este dispositivo', 'warn');
           return;
         }
-        sel.innerHTML = devices.map(d => `<option value="${d.id}">${d.label || 'Cámara'}</option>`).join('');
-        const back = devices.find(d => /back|trás|rear|environment/i.test(d.label || ''));
-        sel.value = back ? back.id : devices[0].id;
+        const back = cams.find(d => /back|trás|rear|environment/i.test(d.label || ''));
+        setSelectedId((back || cams[0]).id);
       } catch (e) {
         console.error('getCameras error:', e);
         showAlert('No se pudo enumerar las cámaras del dispositivo', 'warn');
@@ -68,49 +66,49 @@ export default function Scan() {
     })();
   }, []);
 
-  // Intento de autoarranque suave (si el permiso ya fue concedido alguna vez, arranca solo)
+  // 2) Intento de auto-arranque una vez montado y con layout listo
   useEffect(() => {
+    if (!selectedId) return;
     const t = setTimeout(async () => {
-      try { await handleStart(); setNeedsGesture(false); }
-      catch { setNeedsGesture(true); }
-    }, 200);
+      try {
+        await handleStart();           // si ya había permiso, arranca solo
+        setNeedsGesture(false);
+      } catch (e) {
+        // si el navegador exige gesto, mostramos overlay
+        setNeedsGesture(true);
+      }
+    }, 250); // pequeño delay para asegurar tamaño del contenedor
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedId]);
 
-  // Detener cámara al desmontar
+  // 3) Detener cámara al desmontar
   useEffect(() => {
     return () => { (async () => { try { if (html5QrCode?.isScanning) await html5QrCode.stop(); } catch {} })(); };
   }, [html5QrCode]);
 
-  function placeReaderInHero() {
-    const reader = readerRef.current;
-    const img = imgRef.current;
-    if (!reader || !img) return;
-    const cs = getComputedStyle(img);
-    reader.style.width = cs.width;
-    reader.style.maxWidth = cs.maxWidth !== 'none' ? cs.maxWidth : cs.width;
-    img.replaceWith(reader);
-    reader.classList.add('in-hero');
-    reader.hidden = false;
-    reader.setAttribute('aria-hidden','false');
-  }
+  async function startCamera(cameraId) {
+    const el = readerRef.current;
+    if (!el) throw new Error('Contenedor del lector no está listo');
 
-  async function startCamera(deviceId) {
-    placeReaderInHero();
+    // Aseguramos tamaño visible (alto y ancho > 0) ANTES de start()
+    // (si tu CSS ya lo fija, esto no estorba)
+    el.style.width = el.style.width || '100%';
+    el.style.maxWidth = el.style.maxWidth || '420px';
+    el.style.height = el.style.height || '320px';
+    el.style.background = el.style.background || '#000';
+    el.removeAttribute('hidden');
+    el.setAttribute('aria-hidden', 'false');
 
     let h = html5QrCode;
     if (!h) {
-      h = new Html5Qrcode('reader');
+      h = new Html5Qrcode(el.id || 'reader');
       setHtml5QrCode(h);
     } else if (h.isScanning) {
       try { await h.stop(); } catch {}
     }
 
-    const cameraSelector =
-      deviceId && typeof deviceId === 'string'
-        ? deviceId
-        : { facingMode: 'environment' };
+    const cameraSelector = cameraId ? cameraId : { facingMode: 'environment' };
 
     await h.start(
       cameraSelector,
@@ -134,10 +132,9 @@ export default function Scan() {
   }
 
   async function onCode(text) {
-    // si hay overlay abierto, ignora
-    if (detail) return;
-
+    if (detail) return; // overlay abierto
     if (Date.now() < readyAt) return;
+
     const now = Date.now();
     if (inFlightRef.current) return;
     if (lastScanRef.current.code === text && (now - lastScanRef.current.t) < 1500) return;
@@ -164,9 +161,7 @@ export default function Scan() {
         return;
       }
 
-      // MOSTRAR DETALLE EN OVERLAY (no navegamos de ruta)
-      setDetail(rows[0]);
-      // dejamos la cámara pausada para reanudar luego
+      setDetail(rows[0]); // mostramos overlay
       inFlightRef.current = false;
     } catch {
       showAlert('Fallo en la consulta al servidor', 'error');
@@ -176,17 +171,37 @@ export default function Scan() {
   }
 
   async function handleStart() {
-    const sel = selectRef.current;
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error('El navegador requiere HTTPS y permiso para la cámara');
     }
     setReadyAt(Date.now() + 600);
-    await startCamera(sel?.value);
+    try {
+      await startCamera(selectedId);
+    } catch (e) {
+      console.error('startCamera error:', e);
+      // Errores típicos y qué hacer
+      if (e?.name === 'NotAllowedError') {
+        setNeedsGesture(true);
+        throw e;
+      }
+      if (e?.name === 'NotFoundError') {
+        showAlert('No se encontró cámara disponible', 'warn');
+        throw e;
+      }
+      if (e?.name === 'NotReadableError' || e?.name === 'AbortError') {
+        showAlert('La cámara está en uso por otra app. Ciérrala e inténtalo de nuevo.', 'warn');
+        throw e;
+      }
+      showAlert(`No se pudo iniciar la cámara: ${e?.message || 'Error'}`, 'error');
+      throw e;
+    }
   }
 
   async function handleChangeCamera(e) {
+    const id = e.target.value;
+    setSelectedId(id);
     if (!started) return;
-    try { await startCamera(e.target.value); }
+    try { await startCamera(id); }
     catch { showAlert('No se pudo cambiar la cámara', 'warn'); }
   }
 
@@ -195,9 +210,7 @@ export default function Scan() {
     if (!texto) return;
     try {
       const json = await apiBuscar({ one:1, ...( /^\d+$/.test(texto) ? {barcode:texto} : {referencia:texto} ) });
-      if (!json || json.ok === false) {
-        showAlert(mapApiProblem(json || {}), 'error'); return;
-      }
+      if (!json || json.ok === false) { showAlert(mapApiProblem(json || {}), 'error'); return; }
       const rows = json?.data || [];
       if (!rows.length) { showAlert('Código de barra no encontrado', 'warn'); return; }
       setDetail(rows[0]);
@@ -209,15 +222,22 @@ export default function Scan() {
 
   async function closeDetailAndResume() {
     setDetail(null);
-    setReadyAt(Date.now() + 600); // pequeña gracia para evitar doble lectura inmediata
-    try { await html5QrCode?.resume?.(); } catch {}
+    setReadyAt(Date.now() + 600);
+    // si estaba escaneando, reanuda; si por alguna razón no, intenta arrancar
+    try {
+      if (html5QrCode?.isScanning) { await html5QrCode.resume(true); }
+      else { await handleStart(); }
+    } catch (e) {
+      // si vuelve a pedir gesto, muestra overlay
+      setNeedsGesture(true);
+    }
   }
 
   return (
     <>
       <Alert msg={alert} kind={alertKind} onHide={hideAlert} />
 
-      {/* Si el navegador exige gesto inicial y no pudimos auto-arrancar */}
+      {/* Si el navegador exige gesto inicial */}
       {needsGesture && !started && (
         <div
           onClick={async () => { try { await handleStart(); setNeedsGesture(false); } catch {} }}
@@ -230,7 +250,7 @@ export default function Scan() {
         </div>
       )}
 
-      {/* OVERLAY DE DETALLE (cámara pausada, no pedimos permisos otra vez) */}
+      {/* Overlay de detalle (la cámara está pausada) */}
       {detail && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9998 }}>
           <div className="card" style={{ maxWidth:680, width:'92%', background:'#fff', padding:16, borderRadius:12 }}>
@@ -255,16 +275,37 @@ export default function Scan() {
           <div className="hero__body">
             <h2 className="hero__title">Apunta al código</h2>
 
-            <img ref={imgRef} className="scan-illustration" src="/svg/barcode.jpeg" alt="Ilustración: escanea el código de barras" />
+            {/* CONTENEDOR DEL LECTOR: tamaño fijo visible */}
+            <div
+              id="reader"
+              ref={readerRef}
+              hidden
+              aria-hidden="true"
+              style={{
+                width: '100%',
+                maxWidth: 420,
+                height: 320,          // 👈 alto garantizado para que Html5Qrcode tenga caja
+                background: '#000',
+                borderRadius: 12,
+                margin: '12px auto'
+              }}
+            />
 
             <div className="controls" style={{marginTop:8}}>
               <label className="visually-hidden" htmlFor="cameraSelect">Cámara</label>
-              <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
+              <select id="cameraSelect" title="Cámara" value={selectedId} onChange={handleChangeCamera}>
+                {devices.length === 0 && <option value="">(No hay cámaras)</option>}
+                {devices.map(d => <option key={d.id} value={d.id}>{d.label || 'Cámara'}</option>)}
+              </select>
               <button id="btn-torch" disabled>Linterna</button>
             </div>
 
             <div className="hero__actions" style={{gap:10, flexDirection:'column', alignItems:'flex-start'}}>
-              <button id="btn-start" className="btn-primary" onClick={async ()=>{ try{ await handleStart(); setNeedsGesture(false);}catch(e){ setNeedsGesture(true);} }}>
+              <button
+                id="btn-start"
+                className="btn-primary"
+                onClick={async ()=>{ try{ await handleStart(); setNeedsGesture(false);}catch(e){ setNeedsGesture(true);} }}
+              >
                 {started ? 'Reiniciar escaneo' : 'Iniciar escaneo'}
               </button>
 
@@ -284,8 +325,6 @@ export default function Scan() {
             </div>
           </div>
         </div>
-
-        <div id="reader" ref={readerRef} className="card reader" hidden aria-hidden="true"></div>
       </section>
     </>
   );
