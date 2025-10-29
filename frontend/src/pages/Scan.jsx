@@ -72,7 +72,7 @@ export default function Scan() {
 
     let h = html5QrCode;
     if (!h) {
-      h = new Html5Qrcode('reader');          // 👈 import
+      h = new Html5QrCode('reader');          // 👈 import
       setHtml5QrCode(h);
     } else if (h.isScanning) {
       await h.stop();
