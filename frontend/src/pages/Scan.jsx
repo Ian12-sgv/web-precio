@@ -5,7 +5,7 @@ import { apiBuscar } from '../lib/api';
 function Alert({msg, kind='error', onHide}) {
   if (!msg) return null;
   return (
-    <div className={`alert ${kind==='ok'?'alert--ok':'alert--error'}`} role="alert" onAnimationEnd={()=>{}}>
+    <div className={`alert ${kind==='ok'?'alert--ok':'alert--error'}`} role="alert">
       {msg}
       <div style={{marginTop:6}}>
         <button className="btn-ghost" onClick={onHide}>Cerrar</button>
@@ -39,7 +39,9 @@ export default function Scan() {
         sel.innerHTML = devices.map(d => `<option value="${d.id}">${d.label || 'Cámara'}</option>`).join('');
         const back = devices.find(d => /back|trás|rear|environment/i.test(d.label || ''));
         sel.value = back ? back.id : devices[0].id;
-      } catch {}
+      } catch (e) {
+        console.error('getCameras error:', e);
+      }
     })();
   }, []);
 
@@ -73,12 +75,14 @@ export default function Scan() {
     } else if (h.isScanning) {
       await h.stop();
     }
-    const constraints = deviceId
-      ? { deviceId: { exact: deviceId } }
-      : { facingMode: { exact: 'environment' } };
+
+    // 🔧 IMPORTANTE: para html5-qrcode usa cameraId (string) o { facingMode: "environment" }
+    const cameraSelector = deviceId && typeof deviceId === 'string'
+      ? deviceId
+      : { facingMode: "environment" };
 
     await h.start(
-      constraints,
+      cameraSelector,
       {
         fps: 15,
         qrbox: 280,
@@ -117,7 +121,12 @@ export default function Scan() {
 
   async function handleStart() {
     const sel = selectRef.current;
-    await startCamera(sel?.value);
+    try {
+      await startCamera(sel?.value);
+    } catch (e) {
+      console.error('startCamera error:', e);
+      setAlert(`No se pudo iniciar la cámara: ${e.name||'Error'}`);
+    }
   }
 
   async function handleChangeCamera(e) {
