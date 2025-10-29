@@ -166,7 +166,7 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 /* Buttons + variants */
 .btn-primary{ background:var(--primary); color:#fff; border:1px solid transparent; padding:10px 14px; border-radius:10px; cursor:pointer; width: 100%; }
 .btn-primary:hover{ background:var(--primary-hover) }
-.btn-ghost{ background:transparent; border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:10px; cursor:pointer }
+.btn-ghost{ background:red; border:1px solid var(--border); color:var(--text); padding:10px 14px; border-radius:10px; cursor:pointer }
 .link{ color:var(--link) }
 
 /* Reader */
