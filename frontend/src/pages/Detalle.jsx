@@ -56,7 +56,7 @@ export default function Detalle() {
 
       <div className="actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
         {/* Opción A: Link directo */}
-        <Link className="btn-ghost" to="/scan?autostart=1">Escanear otro producto</Link>
+        <Link className="btn-ghost" to="/scan">Escanear otro producto</Link>
 
 
 
