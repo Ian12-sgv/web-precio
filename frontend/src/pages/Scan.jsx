@@ -40,7 +40,7 @@ export default function Scan() {
 
   const [html5QrCode, setHtml5QrCode] = useState(null);
   const [started, setStarted] = useState(false);
-  const [needsGesture, setNeedsGesture] = useState(false); // ⬅️ fallback para iOS
+  const [needsGesture, setNeedsGesture] = useState(false);
 
   // anti-duplicados
   const inFlightRef  = useRef(false);
@@ -83,66 +83,35 @@ export default function Scan() {
     })();
   }, []);
 
-  // Autostart (con fallback de “primer tap”)
+  // Autostart con “priming” desde Detalle (sessionStorage)
   useEffect(() => {
     if (!hasAutoStart || autoStartedRef.current) return;
     autoStartedRef.current = true;
+    const primed = sessionStorage.getItem('scanPrime') === '1';
 
-    const tryAuto = async () => {
-      // pequeña ventana para evitar lecturas dobles al abrir
+    const doStart = async () => {
       setReadyAt(Date.now() + 1200);
-
-      // intentamos permiso silencioso (si ya lo diste, devuelve stream; si no, fallará)
-      try {
-        if (navigator.mediaDevices?.getUserMedia) {
-          const tmp = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } } });
-          tmp.getTracks().forEach(t => t.stop());
-        }
-      } catch { /* ignoramos */ }
-
-      // Intento de arranque inmediato
       try {
         await handleStart();
-        // si arrancó, quitamos el parámetro
-        params.delete('autostart');
-        setParams(params, { replace: true });
         setNeedsGesture(false);
       } catch (e) {
-        // Si falla por política de gesto o estado de cámara, pedimos un tap
-        setNeedsGesture(true);
-      }
-    };
-
-    // Intento inicial (ligero retardo)
-    const t = setTimeout(tryAuto, 300);
-
-    // Listener one-shot: primer tap en pantalla => start()
-    const onFirstTap = async () => {
-      if (started) return;
-      setNeedsGesture(false);
-      try {
-        await handleStart();
-        params.delete('autostart');
-        setParams(params, { replace: true });
-      } catch (e) {
-        console.error('gesture start error:', e);
+        // Si aún falla (iOS/permiso estricto), pedimos gesto.
         setNeedsGesture(true);
       } finally {
-        window.removeEventListener('pointerdown', onFirstTap, { once: true });
-        window.removeEventListener('touchend', onFirstTap, { once: true });
-        window.removeEventListener('click', onFirstTap, { once: true });
+        sessionStorage.removeItem('scanPrime');
+        params.delete('autostart');
+        setParams(params, { replace: true });
       }
     };
-    window.addEventListener('pointerdown', onFirstTap, { once: true });
-    window.addEventListener('touchend', onFirstTap, { once: true });
-    window.addEventListener('click', onFirstTap, { once: true });
 
-    return () => {
-      clearTimeout(t);
-      window.removeEventListener('pointerdown', onFirstTap, { once: true });
-      window.removeEventListener('touchend', onFirstTap, { once: true });
-      window.removeEventListener('click', onFirstTap, { once: true });
-    };
+    if (primed) {
+      // Arranca inmediatamente gracias al permiso concedido en Detalle
+      doStart();
+    } else {
+      // Intento normal (útil si el permiso ya estaba dado de antes)
+      const t = setTimeout(doStart, 300);
+      return () => clearTimeout(t);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasAutoStart]);
 
@@ -167,7 +136,7 @@ export default function Scan() {
     img.replaceWith(reader);
     reader.classList.add('in-hero');
     reader.hidden = false;
-    reader.setAttribute('aria-hidden', 'false');
+    reader.setAttribute('aria-hidden','false');
   }
 
   async function startCamera(deviceId) {
@@ -184,7 +153,7 @@ export default function Scan() {
     const cameraSelector =
       deviceId && typeof deviceId === 'string'
         ? deviceId
-        : { facingMode: 'environment' }; // usa "ideal" internamente
+        : { facingMode: 'environment' };
 
     await h.start(
       cameraSelector,
@@ -243,7 +212,6 @@ export default function Scan() {
       else if (row.CodigoBarra) nav(`/detalle?barcode=${encodeURIComponent(row.CodigoBarra)}`);
       else nav(`/detalle?referencia=${encodeURIComponent(text)}`);
     } catch (e) {
-      console.error('apiBuscar error:', e);
       showAlert('Fallo en la consulta al servidor', 'error');
       inFlightRef.current = false;
       try { await html5QrCode?.resume?.(); } catch {}
@@ -255,7 +223,6 @@ export default function Scan() {
     if (!navigator.mediaDevices?.getUserMedia) {
       throw new Error('El navegador requiere HTTPS y permiso para la cámara');
     }
-    // pequeña gracia al reiniciar manualmente
     setReadyAt(Date.now() + 600);
     await startCamera(sel?.value);
   }
@@ -271,18 +238,15 @@ export default function Scan() {
     if (!texto) return;
     try {
       const json = await apiBuscar({ one:1, ...( /^\d+$/.test(texto) ? {barcode:texto} : {referencia:texto} ) });
-
       if (!json || json.ok === false) {
         showAlert(mapApiProblem(json || {}), 'error');
         return;
       }
-
       const rows = json?.data || [];
       if (!rows.length) {
         showAlert('Código de barra no encontrado', 'warn');
         return;
       }
-
       const row = rows[0];
       if (row.Referencia) nav(`/detalle?referencia=${encodeURIComponent(row.Referencia)}`);
       else if (row.CodigoBarra) nav(`/detalle?barcode=${encodeURIComponent(row.CodigoBarra)}`);
@@ -295,7 +259,7 @@ export default function Scan() {
     <>
       <Alert msg={alert} kind={alertKind} onHide={hideAlert} />
 
-      {/* Overlay de gesto cuando el navegador lo exige */}
+      {/* Overlay solo si el navegador exige gesto y el auto-start falló */}
       {needsGesture && (
         <div
           onClick={async () => { try { await handleStart(); setNeedsGesture(false); } catch {} }}
