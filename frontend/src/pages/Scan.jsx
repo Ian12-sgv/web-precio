@@ -11,11 +11,21 @@ function Alert({ msg, kind = 'error', onHide }) {
     <div
       className={`alert ${kind === 'ok' ? 'alert--ok' : kind === 'warn' ? 'alert--warn' : 'alert--error'}`}
       role="alert"
-      style={{ borderRadius: 12, padding: '12px 14px', lineHeight: 1.4, boxShadow: '0 6px 18px rgba(0,0,0,.12)', display: 'flex', alignItems: 'start', gap: 10 }}
+      style={{
+        borderRadius: 12,
+        padding: '12px 14px',
+        lineHeight: 1.4,
+        boxShadow: '0 6px 18px rgba(0,0,0,.12)',
+        display: 'flex',
+        alignItems: 'start',
+        gap: 10
+      }}
     >
       <div style={{ fontSize: 22, lineHeight: 1 }}>{icon}</div>
       <div style={{ flex: 1 }}>{msg}</div>
-      <button className="btn-ghost" onClick={onHide} style={{ marginLeft: 8 }}>Cerrar</button>
+      <button className="btn-ghost" onClick={onHide} style={{ marginLeft: 8 }}>
+        Cerrar
+      </button>
     </div>
   );
 }
@@ -25,26 +35,29 @@ export default function Scan() {
   const [params, setParams] = useSearchParams();
 
   const readerRef = useRef(null);
+  const imgRef    = useRef(null);
   const selectRef = useRef(null);
 
   const [html5QrCode, setHtml5QrCode] = useState(null);
   const [started, setStarted] = useState(false);
-  const [devices, setDevices] = useState([]);
+  const [camerasLoaded, setCamerasLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState('');
 
-  // anti-duplicados / timing
-  const inFlightRef  = useRef(false);
-  const lastScanRef  = useRef({ code: '', t: 0 });
+  // 🔒 anti-duplicados y ventana de gracia
+  const inFlightRef   = useRef(false);
+  const startingRef   = useRef(false);
+  const lastScanRef   = useRef({ code: '', t: 0 });
   const [readyAt, setReadyAt] = useState(0);
 
-  // UI
   const [alert, setAlert] = useState('');
   const [alertKind, setAlertKind] = useState('error');
 
+  // 🔧 FIX: Usar estado en lugar de ref para controlar autostart
+  const [autoStartProcessed, setAutoStartProcessed] = useState(false);
+  const hasAutoStart = params.get('autostart') === '1';
+
   const showAlert = (msg, kind = 'error') => { setAlert(msg); setAlertKind(kind); };
   const hideAlert = () => setAlert('');
-
-  const hasAutoStart = params.get('autostart') === '1';
 
   function mapApiProblem(json) {
     const txt = (json?.error || json?.message || '').toString();
@@ -52,101 +65,186 @@ export default function Scan() {
     return dbDown ? 'Fallo al consultar la base de datos' : 'Fallo en la consulta al servidor';
   }
 
-  // 1) Enumerar cámaras y elegir trasera si existe
+  // Enumerar cámaras (y preseleccionar trasera)
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
-        const cams = await Html5Qrcode.getCameras();
-        setDevices(cams || []);
-        if (!cams?.length) {
-          showAlert('No hay cámaras disponibles en este dispositivo', 'warn');
+        const devices = await Html5Qrcode.getCameras();
+        if (cancelled) return;
+        const sel = selectRef.current;
+        if (!sel) return;
+
+        if (!devices?.length) {
+          sel.innerHTML = '<option>No hay cámaras</option>';
+          setCamerasLoaded(true);
           return;
         }
-        const back = cams.find(d => /back|trás|rear|environment/i.test(d.label || ''));
-        const first = (back || cams[0]).id;
-        setSelectedId(first);
+
+        sel.innerHTML = devices.map(d => `<option value="${d.id}">${d.label || 'Cámara'}</option>`).join('');
+        const back = devices.find(d => /back|trás|rear|environment/i.test(d.label || ''));
+        const picked = back ? back.id : devices[0].id;
+        sel.value = picked;
+        setSelectedId(picked);
+        setCamerasLoaded(true);
       } catch (e) {
         console.error('getCameras error:', e);
+        setCamerasLoaded(true);
         showAlert('No se pudo enumerar las cámaras del dispositivo', 'warn');
       }
     })();
+    return () => { cancelled = true; };
   }, []);
 
-  // 2) Autostart al volver desde Detalle (?autostart=1)
+  // 🔧 FIX: Autostart simplificado y más robusto
   useEffect(() => {
-    if (!hasAutoStart || !selectedId) return;
-    // limpia el param para que no quede pegado
-    params.delete('autostart');
-    setParams(params, { replace: true });
+    if (!hasAutoStart || autoStartProcessed) return;
+    if (!camerasLoaded) return;
+    if (document.visibilityState !== 'visible') return;
 
-    setReadyAt(Date.now() + 1200); // evita doble lectura al arrancar
-    const t = setTimeout(() => {
-      handleStart().catch(() => {
-        // si falla (permiso/gesto), el usuario puede tocar "Iniciar escaneo"
-        showAlert('Toca "Iniciar escaneo" para abrir la cámara', 'warn');
+    // Marcar como procesado inmediatamente para evitar múltiples ejecuciones
+    setAutoStartProcessed(true);
+
+    // Limpiar el parámetro autostart del URL
+    const newParams = new URLSearchParams(params);
+    newParams.delete('autostart');
+    setParams(newParams, { replace: true });
+
+    // Configurar ventana de gracia y ejecutar autostart
+    setReadyAt(Date.now() + 1000);
+    
+    const timer = setTimeout(() => {
+      handleStart().catch((err) => {
+        console.error('Autostart failed:', err);
       });
-    }, 300); // pequeño delay para que el contenedor tenga layout
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasAutoStart, selectedId]);
+    }, 300);
 
-  // 3) Detener cámara al desmontar
+    return () => clearTimeout(timer);
+  }, [hasAutoStart, autoStartProcessed, camerasLoaded, params, setParams]);
+
+  // 🔧 FIX: Limpieza mejorada al desmontar
   useEffect(() => {
-    return () => { (async () => { try { if (html5QrCode?.isScanning) await html5QrCode.stop(); } catch {} })(); };
+    return () => {
+      (async () => {
+        try {
+          if (html5QrCode?.isScanning) await html5QrCode.stop();
+        } catch {}
+        try {
+          if (html5QrCode) await html5QrCode.clear();
+        } catch {}
+        
+        // 🔧 FIX: Resetear todos los refs para permitir nuevo autostart
+        inFlightRef.current = false;
+        startingRef.current = false;
+        lastScanRef.current = { code: '', t: 0 };
+      })();
+    };
   }, [html5QrCode]);
 
-  async function startCamera(cameraId) {
-    const el = readerRef.current;
-    if (!el) throw new Error('Contenedor del lector no está listo');
+  // Acomodar el contenedor del lector en el "hero"
+  function placeReaderInHero() {
+    const reader = readerRef.current;
+    const img = imgRef.current;
+    if (!reader || !img) return;
+    const cs = getComputedStyle(img);
+    reader.style.width = cs.width;
+    reader.style.maxWidth = cs.maxWidth !== 'none' ? cs.maxWidth : cs.width;
+    try { img.replaceWith(reader); } catch {}
+    reader.classList.add('in-hero');
+    reader.hidden = false;
+    reader.setAttribute('aria-hidden','false');
+  }
 
-    // Asegura tamaño visible antes de start()
-    el.style.width = el.style.width || '100%';
-    el.style.maxWidth = el.style.maxWidth || '420px';
-    el.style.height = el.style.height || '320px';
-    el.style.background = el.style.background || '#000';
-    el.removeAttribute('hidden');
-    el.setAttribute('aria-hidden', 'false');
-
-    let h = html5QrCode;
-    if (!h) {
-      h = new Html5Qrcode(el.id || 'reader');
-      setHtml5QrCode(h);
-    } else if (h.isScanning) {
-      try { await h.stop(); } catch {}
+  async function ensureFreshInstance() {
+    // Detén y limpia la instancia anterior si existe
+    if (html5QrCode) {
+      try { 
+        if (html5QrCode.isScanning) {
+          await html5QrCode.stop(); 
+        }
+      } catch (e) {
+        console.warn('Error stopping scanner:', e);
+      }
+      try { 
+        await html5QrCode.clear(); 
+      } catch (e) {
+        console.warn('Error clearing scanner:', e);
+      }
+      setHtml5QrCode(null);
     }
+    
+    // 🔧 FIX: Pequeño delay para asegurar liberación de recursos
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Crea nueva instancia
+    const h = new Html5Qrcode('reader');
+    setHtml5QrCode(h);
+    return h;
+  }
 
-    const cameraSelector = cameraId ? cameraId : { facingMode: 'environment' };
+  async function startCamera(deviceIdOrFacing) {
+    placeReaderInHero();
 
-    await h.start(
-      cameraSelector,
-      {
-        fps: 15,
-        qrbox: 280,
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.QR_CODE,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.ITF
-        ]
-      },
-      onCode,
-      () => {}
-    );
-    setStarted(true);
+    if (startingRef.current) {
+      console.log('Camera already starting, skipping...');
+      return;
+    }
+    startingRef.current = true;
+
+    try {
+      const h = await ensureFreshInstance();
+
+      const cameraSelector =
+        (deviceIdOrFacing && typeof deviceIdOrFacing === 'string')
+          ? deviceIdOrFacing
+          : { facingMode: 'environment' };
+
+      await h.start(
+        cameraSelector,
+        {
+          fps: 15,
+          qrbox: 280,
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.ITF
+          ]
+        },
+        onCode,
+        () => {}
+      );
+      setStarted(true);
+    } finally {
+      startingRef.current = false;
+    }
   }
 
   async function onCode(text) {
-    if (Date.now() < readyAt) return;
+    // ⛔ ignora lecturas durante la ventana de arranque
+    if (Date.now() < readyAt) {
+      console.log('Ignoring scan during grace period');
+      return;
+    }
 
+    // ⛔ evita peticiones concurrentes y repeticiones en <1.5s
     const now = Date.now();
-    if (inFlightRef.current) return;
-    if (lastScanRef.current.code === text && (now - lastScanRef.current.t) < 1500) return;
+    if (inFlightRef.current) {
+      console.log('Request already in flight, skipping...');
+      return;
+    }
+    if (lastScanRef.current.code === text && (now - lastScanRef.current.t) < 1500) {
+      console.log('Duplicate scan within 1.5s, skipping...');
+      return;
+    }
+    
     inFlightRef.current = true;
     lastScanRef.current = { code: text, t: now };
 
+    // ⏸️ pausa el escáner mientras consultas (evita múltiples callbacks)
     try { await html5QrCode?.pause?.(true); } catch {}
 
     try {
@@ -159,7 +257,7 @@ export default function Scan() {
         return;
       }
 
-      const rows = Array.isArray(json.data) ? json.data : [];
+      const rows = (Array.isArray(json.data) ? json.data : []);
       if (!rows.length) {
         showAlert('Código de barra no encontrado', 'warn');
         inFlightRef.current = false;
@@ -167,8 +265,10 @@ export default function Scan() {
         return;
       }
 
-      // ✅ detener antes de navegar para evitar doble callback
+      // ✅ parar antes de navegar para que no dispare otro onCode
       try { await html5QrCode?.stop(); } catch {}
+      try { await html5QrCode?.clear(); } catch {}
+
       const row = rows[0];
       if (row.Referencia) nav(`/detalle?referencia=${encodeURIComponent(row.Referencia)}`);
       else if (row.CodigoBarra) nav(`/detalle?barcode=${encodeURIComponent(row.CodigoBarra)}`);
@@ -182,33 +282,28 @@ export default function Scan() {
   }
 
   async function handleStart() {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      throw new Error('El navegador requiere HTTPS y permiso para la cámara');
-    }
-    setReadyAt(Date.now() + 600);
+    const sel = selectRef.current;
     try {
-      await startCamera(selectedId);
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('El navegador requiere HTTPS/permiso para la cámara');
+      }
+      setReadyAt(Date.now() + 600);
+      await startCamera(sel?.value || selectedId || undefined);
     } catch (e) {
       console.error('startCamera error:', e);
-      if (e?.name === 'NotAllowedError') {
-        showAlert('Permite el acceso a la cámara para continuar.', 'warn');
-      } else if (e?.name === 'NotFoundError') {
-        showAlert('No se encontró cámara disponible', 'warn');
-      } else if (e?.name === 'NotReadableError' || e?.name === 'AbortError') {
-        showAlert('La cámara está en uso por otra app. Ciérrala e inténtalo de nuevo.', 'warn');
-      } else {
-        showAlert(`No se pudo iniciar la cámara: ${e?.message || 'Error'}`, 'error');
-      }
-      throw e;
+      const msg = e?.name ? `${e.name}: ${e.message || ''}` : (e?.message || 'Error');
+      showAlert(`No se pudo iniciar la cámara: ${msg}`, 'error');
     }
   }
 
   async function handleChangeCamera(e) {
-    const id = e.target.value;
-    setSelectedId(id);
+    setSelectedId(e.target.value);
     if (!started) return;
-    try { await startCamera(id); }
-    catch { showAlert('No se pudo cambiar la cámara', 'warn'); }
+    try { 
+      await startCamera(e.target.value); 
+    } catch { 
+      showAlert('No se pudo cambiar la cámara', 'warn'); 
+    }
   }
 
   async function handleManualSearch(value) {
@@ -216,11 +311,18 @@ export default function Scan() {
     if (!texto) return;
     try {
       const json = await apiBuscar({ one:1, ...( /^\d+$/.test(texto) ? {barcode:texto} : {referencia:texto} ) });
-      if (!json || json.ok === false) { showAlert(mapApiProblem(json || {}), 'error'); return; }
+
+      if (!json || json.ok === false) {
+        showAlert(mapApiProblem(json || {}), 'error');
+        return;
+      }
+
       const rows = json?.data || [];
-      if (!rows.length) { showAlert('Código de barra no encontrado', 'warn'); return; }
-      // igual que onCode: detenemos y navegamos
-      try { await html5QrCode?.stop(); } catch {}
+      if (!rows.length) {
+        showAlert('Código de barra no encontrado', 'warn');
+        return;
+      }
+
       const row = rows[0];
       if (row.Referencia) nav(`/detalle?referencia=${encodeURIComponent(row.Referencia)}`);
       else if (row.CodigoBarra) nav(`/detalle?barcode=${encodeURIComponent(row.CodigoBarra)}`);
@@ -238,37 +340,16 @@ export default function Scan() {
           <div className="hero__body">
             <h2 className="hero__title">Apunta al código</h2>
 
-            {/* CONTENEDOR DEL LECTOR: tamaño fijo visible */}
-            <div
-              id="reader"
-              ref={readerRef}
-              hidden
-              aria-hidden="true"
-              style={{
-                width: '100%',
-                maxWidth: 420,
-                height: 320,
-                background: '#000',
-                borderRadius: 12,
-                margin: '12px auto'
-              }}
-            />
+            <img ref={imgRef} className="scan-illustration" src="/svg/barcode.jpeg" alt="Ilustración: escanea el código de barras" />
 
             <div className="controls" style={{marginTop:8}}>
               <label className="visually-hidden" htmlFor="cameraSelect">Cámara</label>
-              <select id="cameraSelect" title="Cámara" value={selectedId} onChange={handleChangeCamera} ref={selectRef}>
-                {devices.length === 0 && <option value="">(No hay cámaras)</option>}
-                {devices.map(d => <option key={d.id} value={d.id}>{d.label || 'Cámara'}</option>)}
-              </select>
+              <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
               <button id="btn-torch" disabled>Linterna</button>
             </div>
 
             <div className="hero__actions" style={{gap:10, flexDirection:'column', alignItems:'flex-start'}}>
-              <button
-                id="btn-start"
-                className="btn-primary"
-                onClick={() => handleStart().catch(()=>{})}
-              >
+              <button id="btn-start" className="btn-primary" onClick={handleStart}>
                 {started ? 'Reiniciar escaneo' : 'Iniciar escaneo'}
               </button>
 
@@ -288,6 +369,8 @@ export default function Scan() {
             </div>
           </div>
         </div>
+
+        <div id="reader" ref={readerRef} className="card reader" hidden aria-hidden="true"></div>
       </section>
     </>
   );
