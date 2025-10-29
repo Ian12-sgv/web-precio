@@ -1,5 +1,6 @@
 // src/pages/Scan.jsx
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiBuscar } from '../lib/api';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
@@ -20,11 +21,14 @@ function Alert({ msg, kind = 'error', onHide }) {
 }
 
 export default function Scan() {
+  const nav = useNavigate();
+  const [params, setParams] = useSearchParams();
+
   const readerRef = useRef(null);
+  const selectRef = useRef(null);
 
   const [html5QrCode, setHtml5QrCode] = useState(null);
   const [started, setStarted] = useState(false);
-  const [needsGesture, setNeedsGesture] = useState(false);
   const [devices, setDevices] = useState([]);
   const [selectedId, setSelectedId] = useState('');
 
@@ -36,10 +40,11 @@ export default function Scan() {
   // UI
   const [alert, setAlert] = useState('');
   const [alertKind, setAlertKind] = useState('error');
-  const [detail, setDetail] = useState(null);
 
   const showAlert = (msg, kind = 'error') => { setAlert(msg); setAlertKind(kind); };
   const hideAlert = () => setAlert('');
+
+  const hasAutoStart = params.get('autostart') === '1';
 
   function mapApiProblem(json) {
     const txt = (json?.error || json?.message || '').toString();
@@ -58,7 +63,8 @@ export default function Scan() {
           return;
         }
         const back = cams.find(d => /back|trás|rear|environment/i.test(d.label || ''));
-        setSelectedId((back || cams[0]).id);
+        const first = (back || cams[0]).id;
+        setSelectedId(first);
       } catch (e) {
         console.error('getCameras error:', e);
         showAlert('No se pudo enumerar las cámaras del dispositivo', 'warn');
@@ -66,21 +72,23 @@ export default function Scan() {
     })();
   }, []);
 
-  // 2) Intento de auto-arranque una vez montado y con layout listo
+  // 2) Autostart al volver desde Detalle (?autostart=1)
   useEffect(() => {
-    if (!selectedId) return;
-    const t = setTimeout(async () => {
-      try {
-        await handleStart();           // si ya había permiso, arranca solo
-        setNeedsGesture(false);
-      } catch (e) {
-        // si el navegador exige gesto, mostramos overlay
-        setNeedsGesture(true);
-      }
-    }, 250); // pequeño delay para asegurar tamaño del contenedor
+    if (!hasAutoStart || !selectedId) return;
+    // limpia el param para que no quede pegado
+    params.delete('autostart');
+    setParams(params, { replace: true });
+
+    setReadyAt(Date.now() + 1200); // evita doble lectura al arrancar
+    const t = setTimeout(() => {
+      handleStart().catch(() => {
+        // si falla (permiso/gesto), el usuario puede tocar "Iniciar escaneo"
+        showAlert('Toca "Iniciar escaneo" para abrir la cámara', 'warn');
+      });
+    }, 300); // pequeño delay para que el contenedor tenga layout
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+  }, [hasAutoStart, selectedId]);
 
   // 3) Detener cámara al desmontar
   useEffect(() => {
@@ -91,8 +99,7 @@ export default function Scan() {
     const el = readerRef.current;
     if (!el) throw new Error('Contenedor del lector no está listo');
 
-    // Aseguramos tamaño visible (alto y ancho > 0) ANTES de start()
-    // (si tu CSS ya lo fija, esto no estorba)
+    // Asegura tamaño visible antes de start()
     el.style.width = el.style.width || '100%';
     el.style.maxWidth = el.style.maxWidth || '420px';
     el.style.height = el.style.height || '320px';
@@ -132,7 +139,6 @@ export default function Scan() {
   }
 
   async function onCode(text) {
-    if (detail) return; // overlay abierto
     if (Date.now() < readyAt) return;
 
     const now = Date.now();
@@ -161,9 +167,14 @@ export default function Scan() {
         return;
       }
 
-      setDetail(rows[0]); // mostramos overlay
-      inFlightRef.current = false;
-    } catch {
+      // ✅ detener antes de navegar para evitar doble callback
+      try { await html5QrCode?.stop(); } catch {}
+      const row = rows[0];
+      if (row.Referencia) nav(`/detalle?referencia=${encodeURIComponent(row.Referencia)}`);
+      else if (row.CodigoBarra) nav(`/detalle?barcode=${encodeURIComponent(row.CodigoBarra)}`);
+      else nav(`/detalle?referencia=${encodeURIComponent(text)}`);
+    } catch (e) {
+      console.error('apiBuscar error:', e);
       showAlert('Fallo en la consulta al servidor', 'error');
       inFlightRef.current = false;
       try { await html5QrCode?.resume?.(); } catch {}
@@ -179,20 +190,15 @@ export default function Scan() {
       await startCamera(selectedId);
     } catch (e) {
       console.error('startCamera error:', e);
-      // Errores típicos y qué hacer
       if (e?.name === 'NotAllowedError') {
-        setNeedsGesture(true);
-        throw e;
-      }
-      if (e?.name === 'NotFoundError') {
+        showAlert('Permite el acceso a la cámara para continuar.', 'warn');
+      } else if (e?.name === 'NotFoundError') {
         showAlert('No se encontró cámara disponible', 'warn');
-        throw e;
-      }
-      if (e?.name === 'NotReadableError' || e?.name === 'AbortError') {
+      } else if (e?.name === 'NotReadableError' || e?.name === 'AbortError') {
         showAlert('La cámara está en uso por otra app. Ciérrala e inténtalo de nuevo.', 'warn');
-        throw e;
+      } else {
+        showAlert(`No se pudo iniciar la cámara: ${e?.message || 'Error'}`, 'error');
       }
-      showAlert(`No se pudo iniciar la cámara: ${e?.message || 'Error'}`, 'error');
       throw e;
     }
   }
@@ -213,62 +219,19 @@ export default function Scan() {
       if (!json || json.ok === false) { showAlert(mapApiProblem(json || {}), 'error'); return; }
       const rows = json?.data || [];
       if (!rows.length) { showAlert('Código de barra no encontrado', 'warn'); return; }
-      setDetail(rows[0]);
-      try { await html5QrCode?.pause?.(true); } catch {}
+      // igual que onCode: detenemos y navegamos
+      try { await html5QrCode?.stop(); } catch {}
+      const row = rows[0];
+      if (row.Referencia) nav(`/detalle?referencia=${encodeURIComponent(row.Referencia)}`);
+      else if (row.CodigoBarra) nav(`/detalle?barcode=${encodeURIComponent(row.CodigoBarra)}`);
     } catch {
       showAlert('Fallo en la consulta al servidor', 'error');
-    }
-  }
-
-  async function closeDetailAndResume() {
-    setDetail(null);
-    setReadyAt(Date.now() + 600);
-    // si estaba escaneando, reanuda; si por alguna razón no, intenta arrancar
-    try {
-      if (html5QrCode?.isScanning) { await html5QrCode.resume(true); }
-      else { await handleStart(); }
-    } catch (e) {
-      // si vuelve a pedir gesto, muestra overlay
-      setNeedsGesture(true);
     }
   }
 
   return (
     <>
       <Alert msg={alert} kind={alertKind} onHide={hideAlert} />
-
-      {/* Si el navegador exige gesto inicial */}
-      {needsGesture && !started && (
-        <div
-          onClick={async () => { try { await handleStart(); setNeedsGesture(false); } catch {} }}
-          onTouchEnd={async () => { try { await handleStart(); setNeedsGesture(false); } catch {} }}
-          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.6)', display:'flex', alignItems:'center', justifyContent:'center', zIndex: 9999 }}
-        >
-          <button className="btn-primary" style={{ fontSize:18, padding:'14px 18px', borderRadius:12 }} aria-label="Toca para iniciar la cámara">
-            Toca para iniciar la cámara
-          </button>
-        </div>
-      )}
-
-      {/* Overlay de detalle (la cámara está pausada) */}
-      {detail && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9998 }}>
-          <div className="card" style={{ maxWidth:680, width:'92%', background:'#fff', padding:16, borderRadius:12 }}>
-            <h2 style={{ margin:'0 0 8px' }}>{detail.Nombre}</h2>
-            <div className="row" style={{ display:'grid', gridTemplateColumns:'180px 1fr', gap:'8px 12px', marginTop:8 }}>
-              <div><strong>Referencia</strong></div><div>{detail.Referencia}</div>
-              <div><strong>Código barras</strong></div><div>{detail.CodigoBarra || '—'}</div>
-              <div><strong>Costo Dólar</strong></div><div>{detail.CostoInicial}</div>
-              <div><strong>Precio bolívares</strong></div><div>{detail.PrecioDetal}</div>
-            </div>
-            <div className="actions" style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:12 }}>
-              <button className="btn-ghost" onClick={closeDetailAndResume}>
-                Escanear otro producto
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <section id="pane-scan" className="pane is-visible" role="region" aria-label="Escanear o ingresar código">
         <div className="hero card">
@@ -284,7 +247,7 @@ export default function Scan() {
               style={{
                 width: '100%',
                 maxWidth: 420,
-                height: 320,          // 👈 alto garantizado para que Html5Qrcode tenga caja
+                height: 320,
                 background: '#000',
                 borderRadius: 12,
                 margin: '12px auto'
@@ -293,7 +256,7 @@ export default function Scan() {
 
             <div className="controls" style={{marginTop:8}}>
               <label className="visually-hidden" htmlFor="cameraSelect">Cámara</label>
-              <select id="cameraSelect" title="Cámara" value={selectedId} onChange={handleChangeCamera}>
+              <select id="cameraSelect" title="Cámara" value={selectedId} onChange={handleChangeCamera} ref={selectRef}>
                 {devices.length === 0 && <option value="">(No hay cámaras)</option>}
                 {devices.map(d => <option key={d.id} value={d.id}>{d.label || 'Cámara'}</option>)}
               </select>
@@ -304,7 +267,7 @@ export default function Scan() {
               <button
                 id="btn-start"
                 className="btn-primary"
-                onClick={async ()=>{ try{ await handleStart(); setNeedsGesture(false);}catch(e){ setNeedsGesture(true);} }}
+                onClick={() => handleStart().catch(()=>{})}
               >
                 {started ? 'Reiniciar escaneo' : 'Iniciar escaneo'}
               </button>
