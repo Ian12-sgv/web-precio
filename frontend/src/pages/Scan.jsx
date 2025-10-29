@@ -44,16 +44,17 @@ export default function Scan() {
   const [selectedId, setSelectedId] = useState('');
 
   // 🔒 anti-duplicados y ventana de gracia
-  const inFlightRef   = useRef(false);                  // evita 2 fetch en paralelo
-  const startingRef   = useRef(false);                  // evita doble start cámara
-  const lastScanRef   = useRef({ code: '', t: 0 });     // evita repetir por 1.5s
-  const [readyAt, setReadyAt] = useState(0);           // ignora lecturas en arranque
+  const inFlightRef   = useRef(false);
+  const startingRef   = useRef(false);
+  const lastScanRef   = useRef({ code: '', t: 0 });
+  const [readyAt, setReadyAt] = useState(0);
 
   const [alert, setAlert] = useState('');
   const [alertKind, setAlertKind] = useState('error');
 
+  // 🔧 FIX: Usar estado en lugar de ref para controlar autostart
+  const [autoStartProcessed, setAutoStartProcessed] = useState(false);
   const hasAutoStart = params.get('autostart') === '1';
-  const didAutoStartRef = useRef(false); // autostart solo una vez por montaje
 
   const showAlert = (msg, kind = 'error') => { setAlert(msg); setAlertKind(kind); };
   const hideAlert = () => setAlert('');
@@ -88,47 +89,40 @@ export default function Scan() {
         setCamerasLoaded(true);
       } catch (e) {
         console.error('getCameras error:', e);
-        setCamerasLoaded(true); // marcamos listo aunque falló, para no bloquear autostart
+        setCamerasLoaded(true);
         showAlert('No se pudo enumerar las cámaras del dispositivo', 'warn');
       }
     })();
     return () => { cancelled = true; };
   }, []);
 
-  // Autostart: esperar visibilidad + cámaras cargadas
+  // 🔧 FIX: Autostart simplificado y más robusto
   useEffect(() => {
-    if (!hasAutoStart) return;
+    if (!hasAutoStart || autoStartProcessed) return;
+    if (!camerasLoaded) return;
+    if (document.visibilityState !== 'visible') return;
 
-    // limpiar el parámetro autostart del URL
-    params.delete('autostart');
-    setParams(params, { replace: true });
+    // Marcar como procesado inmediatamente para evitar múltiples ejecuciones
+    setAutoStartProcessed(true);
 
-    const tryAutoStart = async () => {
-      if (didAutoStartRef.current) return;
-      if (document.visibilityState !== 'visible') return;
-      if (!camerasLoaded) return;
-      didAutoStartRef.current = true;
-      setReadyAt(Date.now() + 1000); // ⏳ ventana anti “doble lectura”
-      // breve delay para que el motor libere cámara en navegaciones rápidas
-      setTimeout(() => { handleStart().catch(() => {}); }, 300);
-    };
+    // Limpiar el parámetro autostart del URL
+    const newParams = new URLSearchParams(params);
+    newParams.delete('autostart');
+    setParams(newParams, { replace: true });
 
-    // intentar cuando todo esté listo
-    const visHandler = () => tryAutoStart();
-    document.addEventListener('visibilitychange', visHandler);
-    const id = setInterval(tryAutoStart, 150);
+    // Configurar ventana de gracia y ejecutar autostart
+    setReadyAt(Date.now() + 1000);
+    
+    const timer = setTimeout(() => {
+      handleStart().catch((err) => {
+        console.error('Autostart failed:', err);
+      });
+    }, 300);
 
-    // intento inmediato por si ya está visible y listo
-    tryAutoStart();
+    return () => clearTimeout(timer);
+  }, [hasAutoStart, autoStartProcessed, camerasLoaded, params, setParams]);
 
-    return () => {
-      clearInterval(id);
-      document.removeEventListener('visibilitychange', visHandler);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasAutoStart, camerasLoaded]);
-
-  // 🧹 Detener y limpiar la cámara al desmontar
+  // 🔧 FIX: Limpieza mejorada al desmontar
   useEffect(() => {
     return () => {
       (async () => {
@@ -138,6 +132,11 @@ export default function Scan() {
         try {
           if (html5QrCode) await html5QrCode.clear();
         } catch {}
+        
+        // 🔧 FIX: Resetear todos los refs para permitir nuevo autostart
+        inFlightRef.current = false;
+        startingRef.current = false;
+        lastScanRef.current = { code: '', t: 0 };
       })();
     };
   }, [html5QrCode]);
@@ -159,10 +158,24 @@ export default function Scan() {
   async function ensureFreshInstance() {
     // Detén y limpia la instancia anterior si existe
     if (html5QrCode) {
-      try { if (html5QrCode.isScanning) await html5QrCode.stop(); } catch {}
-      try { await html5QrCode.clear(); } catch {}
+      try { 
+        if (html5QrCode.isScanning) {
+          await html5QrCode.stop(); 
+        }
+      } catch (e) {
+        console.warn('Error stopping scanner:', e);
+      }
+      try { 
+        await html5QrCode.clear(); 
+      } catch (e) {
+        console.warn('Error clearing scanner:', e);
+      }
       setHtml5QrCode(null);
     }
+    
+    // 🔧 FIX: Pequeño delay para asegurar liberación de recursos
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     // Crea nueva instancia
     const h = new Html5Qrcode('reader');
     setHtml5QrCode(h);
@@ -172,17 +185,20 @@ export default function Scan() {
   async function startCamera(deviceIdOrFacing) {
     placeReaderInHero();
 
-    if (startingRef.current) return;
+    if (startingRef.current) {
+      console.log('Camera already starting, skipping...');
+      return;
+    }
     startingRef.current = true;
 
-    const h = await ensureFreshInstance();
-
-    const cameraSelector =
-      (deviceIdOrFacing && typeof deviceIdOrFacing === 'string')
-        ? deviceIdOrFacing
-        : { facingMode: 'environment' };
-
     try {
+      const h = await ensureFreshInstance();
+
+      const cameraSelector =
+        (deviceIdOrFacing && typeof deviceIdOrFacing === 'string')
+          ? deviceIdOrFacing
+          : { facingMode: 'environment' };
+
       await h.start(
         cameraSelector,
         {
@@ -209,12 +225,22 @@ export default function Scan() {
 
   async function onCode(text) {
     // ⛔ ignora lecturas durante la ventana de arranque
-    if (Date.now() < readyAt) return;
+    if (Date.now() < readyAt) {
+      console.log('Ignoring scan during grace period');
+      return;
+    }
 
     // ⛔ evita peticiones concurrentes y repeticiones en <1.5s
     const now = Date.now();
-    if (inFlightRef.current) return;
-    if (lastScanRef.current.code === text && (now - lastScanRef.current.t) < 1500) return;
+    if (inFlightRef.current) {
+      console.log('Request already in flight, skipping...');
+      return;
+    }
+    if (lastScanRef.current.code === text && (now - lastScanRef.current.t) < 1500) {
+      console.log('Duplicate scan within 1.5s, skipping...');
+      return;
+    }
+    
     inFlightRef.current = true;
     lastScanRef.current = { code: text, t: now };
 
@@ -261,21 +287,23 @@ export default function Scan() {
       if (!navigator.mediaDevices?.getUserMedia) {
         throw new Error('El navegador requiere HTTPS/permiso para la cámara');
       }
-      setReadyAt(Date.now() + 600); // pequeña gracia al reiniciar manualmente
+      setReadyAt(Date.now() + 600);
       await startCamera(sel?.value || selectedId || undefined);
     } catch (e) {
       console.error('startCamera error:', e);
       const msg = e?.name ? `${e.name}: ${e.message || ''}` : (e?.message || 'Error');
       showAlert(`No se pudo iniciar la cámara: ${msg}`, 'error');
-      // Si falló por permisos/uso simultáneo, el usuario puede tocar el botón manualmente
     }
   }
 
   async function handleChangeCamera(e) {
     setSelectedId(e.target.value);
     if (!started) return;
-    try { await startCamera(e.target.value); }
-    catch { showAlert('No se pudo cambiar la cámara', 'warn'); }
+    try { 
+      await startCamera(e.target.value); 
+    } catch { 
+      showAlert('No se pudo cambiar la cámara', 'warn'); 
+    }
   }
 
   async function handleManualSearch(value) {
