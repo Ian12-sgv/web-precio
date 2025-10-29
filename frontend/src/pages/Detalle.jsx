@@ -1,6 +1,6 @@
 // src/pages/Detalle.jsx
 import React, { useEffect, useState } from 'react';
-import { useSearchParams, Link, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { apiBuscar } from '../lib/api';
 
 export default function Detalle() {
@@ -10,6 +10,7 @@ export default function Detalle() {
   const [item, setItem] = useState(null);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
+  const [prepping, setPrepping] = useState(false); // estado para “precalentar” cámara
 
   useEffect(() => {
     let alive = true;
@@ -37,8 +38,29 @@ export default function Detalle() {
       }
     })();
 
-    return () => { alive = false; }; // evita setState tras desmontar
+    return () => { alive = false; };
   }, [params]);
+
+  // Click que “precalienta” permisos de cámara y navega a /scan?autostart=1
+  const handleScanOtro = async () => {
+    setPrepping(true);
+    try {
+      if (navigator.mediaDevices?.getUserMedia) {
+        // Pedimos cámara dentro del gesto del usuario (click); iOS lo acepta
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } }
+        });
+        // Cerramos de inmediato; solo queremos el permiso
+        stream.getTracks().forEach(t => t.stop());
+      }
+    } catch {
+      // Si el usuario niega o hay restricción, igual navegamos.
+      // En /scan el usuario podrá tocar “Iniciar escaneo”.
+    } finally {
+      setPrepping(false);
+      navigate('/scan?autostart=1');
+    }
+  };
 
   if (loading)  return <div className="notfound">Cargando…</div>;
   if (err)      return <div className="notfound">{err}</div>;
@@ -55,15 +77,14 @@ export default function Detalle() {
       </div>
 
       <div className="actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-        {/* Opción A: Link directo */}
-        <Link className="btn-ghost" to="/scan">Escanear otro producto</Link>
-
-
-
-        {/* Opción B: botón programático (idéntico efecto) */}
-        {/* <button className="btn-ghost" onClick={() => navigate('/scan?autostart=1', { replace: true })}>
-          Escanear otro producto
-        </button> */}
+        <button
+          className="btn-ghost"
+          onClick={handleScanOtro}
+          disabled={prepping}
+          aria-busy={prepping ? 'true' : 'false'}
+        >
+          {prepping ? 'Abriendo cámara…' : 'Escanear otro producto'}
+        </button>
       </div>
     </div>
   );
