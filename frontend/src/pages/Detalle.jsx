@@ -10,7 +10,7 @@ export default function Detalle() {
   const [item, setItem] = useState(null);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
-  const [prepping, setPrepping] = useState(false);
+  const [prepping, setPrepping] = useState(false); // estado para “precalentar” cámara
 
   useEffect(() => {
     let alive = true;
@@ -41,43 +41,24 @@ export default function Detalle() {
     return () => { alive = false; };
   }, [params]);
 
-  // 🔧 FIX: Click que "precalienta" permisos de cámara y navega a /scan?autostart=1
+  // Click que “precalienta” permisos de cámara y navega a /scan?autostart=1
   const handleScanOtro = async () => {
     setPrepping(true);
-    
-    // Pequeño delay para mostrar feedback visual
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
     try {
       if (navigator.mediaDevices?.getUserMedia) {
         // Pedimos cámara dentro del gesto del usuario (click); iOS lo acepta
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: 'environment' } }
         });
-        
-        // 🔧 FIX: Delay mínimo antes de cerrar el stream
-        // Esto asegura que el sistema operativo registre correctamente el permiso
-        await new Promise(resolve => setTimeout(resolve, 200));
-        
         // Cerramos de inmediato; solo queremos el permiso
         stream.getTracks().forEach(t => t.stop());
-        
-        // 🔧 FIX: Otro delay después de cerrar para asegurar liberación
-        await new Promise(resolve => setTimeout(resolve, 150));
-        
-        console.log('✅ Permisos de cámara obtenidos y liberados');
       }
-    } catch (e) {
-      console.warn('⚠️ No se pudo precalentar la cámara:', e.message);
+    } catch {
       // Si el usuario niega o hay restricción, igual navegamos.
-      // En /scan el usuario podrá tocar "Iniciar escaneo".
+      // En /scan el usuario podrá tocar “Iniciar escaneo”.
     } finally {
-      // 🔧 FIX: Navegar con state para mejor control
-      navigate('/scan?autostart=1', { 
-        replace: false,
-        state: { fromDetalle: true }
-      });
       setPrepping(false);
+      navigate('/scan?autostart=1');
     }
   };
 
@@ -102,15 +83,7 @@ export default function Detalle() {
           disabled={prepping}
           aria-busy={prepping ? 'true' : 'false'}
         >
-          {prepping ? 'Preparando cámara…' : 'Escanear otro producto'}
-        </button>
-        
-        <button
-          className="btn-ghost"
-          onClick={() => navigate('/scan')}
-          disabled={prepping}
-        >
-          Scanear otro producto 
+          {prepping ? 'Abriendo cámara…' : 'Escanear otro producto'}
         </button>
       </div>
     </div>
