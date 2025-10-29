@@ -40,16 +40,20 @@ export default function Scan() {
 
   const [html5QrCode, setHtml5QrCode] = useState(null);
   const [started, setStarted] = useState(false);
+  const [camerasLoaded, setCamerasLoaded] = useState(false);
+  const [selectedId, setSelectedId] = useState('');
 
   // 🔒 anti-duplicados y ventana de gracia
-  const inFlightRef  = useRef(false);                  // evita 2 fetch en paralelo
-  const lastScanRef  = useRef({ code: '', t: 0 });     // evita repetir por 1.5s
+  const inFlightRef   = useRef(false);                  // evita 2 fetch en paralelo
+  const startingRef   = useRef(false);                  // evita doble start cámara
+  const lastScanRef   = useRef({ code: '', t: 0 });     // evita repetir por 1.5s
   const [readyAt, setReadyAt] = useState(0);           // ignora lecturas en arranque
 
   const [alert, setAlert] = useState('');
   const [alertKind, setAlertKind] = useState('error');
 
   const hasAutoStart = params.get('autostart') === '1';
+  const didAutoStartRef = useRef(false); // autostart solo una vez por montaje
 
   const showAlert = (msg, kind = 'error') => { setAlert(msg); setAlertKind(kind); };
   const hideAlert = () => setAlert('');
@@ -60,50 +64,85 @@ export default function Scan() {
     return dbDown ? 'Fallo al consultar la base de datos' : 'Fallo en la consulta al servidor';
   }
 
-  // Enumerar cámaras
+  // Enumerar cámaras (y preseleccionar trasera)
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const devices = await Html5Qrcode.getCameras();
+        if (cancelled) return;
         const sel = selectRef.current;
         if (!sel) return;
+
         if (!devices?.length) {
           sel.innerHTML = '<option>No hay cámaras</option>';
+          setCamerasLoaded(true);
           return;
         }
+
         sel.innerHTML = devices.map(d => `<option value="${d.id}">${d.label || 'Cámara'}</option>`).join('');
         const back = devices.find(d => /back|trás|rear|environment/i.test(d.label || ''));
-        sel.value = back ? back.id : devices[0].id;
+        const picked = back ? back.id : devices[0].id;
+        sel.value = picked;
+        setSelectedId(picked);
+        setCamerasLoaded(true);
       } catch (e) {
         console.error('getCameras error:', e);
+        setCamerasLoaded(true); // marcamos listo aunque falló, para no bloquear autostart
         showAlert('No se pudo enumerar las cámaras del dispositivo', 'warn');
       }
     })();
+    return () => { cancelled = true; };
   }, []);
 
-  // Autostart con pequeño retardo para que el SO libere la cámara
+  // Autostart: esperar visibilidad + cámaras cargadas
   useEffect(() => {
     if (!hasAutoStart) return;
+
+    // limpiar el parámetro autostart del URL
     params.delete('autostart');
     setParams(params, { replace: true });
-    setReadyAt(Date.now() + 1200); // ⏳ ventana para evitar lecturas dobles
-    setTimeout(() => {             // ⌛ 350ms ayuda a evitar NotReadable/Abort en móviles
-      handleStart().catch(()=>{});
-    }, 350);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  // 🧹 Detener la cámara al desmontar
+    const tryAutoStart = async () => {
+      if (didAutoStartRef.current) return;
+      if (document.visibilityState !== 'visible') return;
+      if (!camerasLoaded) return;
+      didAutoStartRef.current = true;
+      setReadyAt(Date.now() + 1000); // ⏳ ventana anti “doble lectura”
+      // breve delay para que el motor libere cámara en navegaciones rápidas
+      setTimeout(() => { handleStart().catch(() => {}); }, 300);
+    };
+
+    // intentar cuando todo esté listo
+    const visHandler = () => tryAutoStart();
+    document.addEventListener('visibilitychange', visHandler);
+    const id = setInterval(tryAutoStart, 150);
+
+    // intento inmediato por si ya está visible y listo
+    tryAutoStart();
+
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', visHandler);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasAutoStart, camerasLoaded]);
+
+  // 🧹 Detener y limpiar la cámara al desmontar
   useEffect(() => {
     return () => {
       (async () => {
         try {
           if (html5QrCode?.isScanning) await html5QrCode.stop();
         } catch {}
+        try {
+          if (html5QrCode) await html5QrCode.clear();
+        } catch {}
       })();
     };
   }, [html5QrCode]);
 
+  // Acomodar el contenedor del lector en el "hero"
   function placeReaderInHero() {
     const reader = readerRef.current;
     const img = imgRef.current;
@@ -111,47 +150,61 @@ export default function Scan() {
     const cs = getComputedStyle(img);
     reader.style.width = cs.width;
     reader.style.maxWidth = cs.maxWidth !== 'none' ? cs.maxWidth : cs.width;
-    img.replaceWith(reader);
+    try { img.replaceWith(reader); } catch {}
     reader.classList.add('in-hero');
     reader.hidden = false;
     reader.setAttribute('aria-hidden','false');
   }
 
-  async function startCamera(deviceId) {
+  async function ensureFreshInstance() {
+    // Detén y limpia la instancia anterior si existe
+    if (html5QrCode) {
+      try { if (html5QrCode.isScanning) await html5QrCode.stop(); } catch {}
+      try { await html5QrCode.clear(); } catch {}
+      setHtml5QrCode(null);
+    }
+    // Crea nueva instancia
+    const h = new Html5Qrcode('reader');
+    setHtml5QrCode(h);
+    return h;
+  }
+
+  async function startCamera(deviceIdOrFacing) {
     placeReaderInHero();
 
-    let h = html5QrCode;
-    if (!h) {
-      h = new Html5Qrcode('reader');
-      setHtml5QrCode(h);
-    } else if (h.isScanning) {
-      try { await h.stop(); } catch {}
-    }
+    if (startingRef.current) return;
+    startingRef.current = true;
+
+    const h = await ensureFreshInstance();
 
     const cameraSelector =
-      deviceId && typeof deviceId === 'string'
-        ? deviceId
+      (deviceIdOrFacing && typeof deviceIdOrFacing === 'string')
+        ? deviceIdOrFacing
         : { facingMode: 'environment' };
 
-    await h.start(
-      cameraSelector,
-      {
-        fps: 15,
-        qrbox: 280,
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.QR_CODE,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.ITF
-        ]
-      },
-      onCode,
-      () => {}
-    );
-    setStarted(true);
+    try {
+      await h.start(
+        cameraSelector,
+        {
+          fps: 15,
+          qrbox: 280,
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.ITF
+          ]
+        },
+        onCode,
+        () => {}
+      );
+      setStarted(true);
+    } finally {
+      startingRef.current = false;
+    }
   }
 
   async function onCode(text) {
@@ -188,6 +241,7 @@ export default function Scan() {
 
       // ✅ parar antes de navegar para que no dispare otro onCode
       try { await html5QrCode?.stop(); } catch {}
+      try { await html5QrCode?.clear(); } catch {}
 
       const row = rows[0];
       if (row.Referencia) nav(`/detalle?referencia=${encodeURIComponent(row.Referencia)}`);
@@ -208,15 +262,17 @@ export default function Scan() {
         throw new Error('El navegador requiere HTTPS/permiso para la cámara');
       }
       setReadyAt(Date.now() + 600); // pequeña gracia al reiniciar manualmente
-      await startCamera(sel?.value);
+      await startCamera(sel?.value || selectedId || undefined);
     } catch (e) {
       console.error('startCamera error:', e);
       const msg = e?.name ? `${e.name}: ${e.message || ''}` : (e?.message || 'Error');
       showAlert(`No se pudo iniciar la cámara: ${msg}`, 'error');
+      // Si falló por permisos/uso simultáneo, el usuario puede tocar el botón manualmente
     }
   }
 
   async function handleChangeCamera(e) {
+    setSelectedId(e.target.value);
     if (!started) return;
     try { await startCamera(e.target.value); }
     catch { showAlert('No se pudo cambiar la cámara', 'warn'); }
@@ -266,7 +322,7 @@ export default function Scan() {
 
             <div className="hero__actions" style={{gap:10, flexDirection:'column', alignItems:'flex-start'}}>
               <button id="btn-start" className="btn-primary" onClick={handleStart}>
-                Iniciar escaneo
+                {started ? 'Reiniciar escaneo' : 'Iniciar escaneo'}
               </button>
 
               <div style={{display:'flex', gap:8, width:'100%', maxWidth:420}}>
