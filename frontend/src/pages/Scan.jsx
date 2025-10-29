@@ -259,27 +259,6 @@ export default function Scan() {
     <>
       <Alert msg={alert} kind={alertKind} onHide={hideAlert} />
 
-      {/* Overlay solo si el navegador exige gesto y el auto-start falló */}
-      {needsGesture && (
-        <div
-          onClick={async () => { try { await handleStart(); setNeedsGesture(false); } catch {} }}
-          onTouchEnd={async () => { try { await handleStart(); setNeedsGesture(false); } catch {} }}
-          style={{
-            position:'fixed', inset:0, background:'rgba(0,0,0,.6)',
-            display:'flex', alignItems:'center', justifyContent:'center',
-            zIndex: 9999
-          }}
-        >
-          <button
-            className="btn-primary"
-            style={{ fontSize:18, padding:'14px 18px', borderRadius:12 }}
-            aria-label="Toca para iniciar la cámara"
-          >
-            Toca para iniciar la cámara
-          </button>
-        </div>
-      )}
-
       <section id="pane-scan" className="pane is-visible" role="region" aria-label="Escanear o ingresar código">
         <div className="hero card">
           <div className="hero__body">
