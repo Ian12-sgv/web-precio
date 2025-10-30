@@ -23,7 +23,7 @@ function Alert({ msg, kind = 'error', onHide }) {
     >
       <div style={{ fontSize: 22, lineHeight: 1 }}>{icon}</div>
       <div style={{ flex: 1 }}>{msg}</div>
-      <button className="btn-ghost" onClick={onHide} style={{ marginLeft: 8 }}>
+      <button className="btn-ghost" onClick={onHide} style={{ marginLeft: 8, style: { color: 'white' } }}>
         Cerrar
       </button>
     </div>
