@@ -3,9 +3,9 @@
   color-scheme: light dark;
   /* LIGHT */
   --bg:#F7F7F7;
-  /*--bg-grad1:#eef1ff;
-  --bg-grad2:#e6f0ff;
-  --card:#ffffff;*/
+  --bg-grad1:#F7F7F7;
+  --bg-grad2:#F7F7F7;
+  --card:#ffffff;
   --surface:#f7f8fb;
   --text:#0b0c0f;
   --muted:#4b5563;
