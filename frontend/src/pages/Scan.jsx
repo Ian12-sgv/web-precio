@@ -96,28 +96,37 @@ export default function Scan() {
     return () => { cancelled = true; };
   }, []);
 
-  // Autostart por query (?autostart=1) – tu lógica original
+  // ✅ Autostart por query PERO solo si venimos de Detalle (scanPrime=1)
   useEffect(() => {
     if (!hasAutoStart || autoStartProcessed) return;
     if (!camerasLoaded) return;
+
+    const prime = (() => { try { return sessionStorage.getItem('scanPrime') === '1'; } catch { return false; } })();
+    if (!prime) return; // ← exige venir de Detalle
+
     if (document.visibilityState !== 'visible') return;
 
     setAutoStartProcessed(true);
 
+    // limpia ?autostart=1 del URL
     const newParams = new URLSearchParams(params);
     newParams.delete('autostart');
     setParams(newParams, { replace: true });
 
     setReadyAt(Date.now() + 1000);
     const timer = setTimeout(() => {
-      handleStart().catch((err) => console.error('Autostart failed:', err));
+      handleStart()
+        .catch(err => console.error('Autostart failed:', err))
+        .finally(() => { try { sessionStorage.removeItem('scanPrime'); } catch {} });
     }, 300);
     return () => clearTimeout(timer);
   }, [hasAutoStart, autoStartProcessed, camerasLoaded, params, setParams]);
 
-  // 🔁 Reintento de autostart al volver visible / foco / pageshow (bfcache)
+  // ✅ Reintento de autostart SOLO si venimos de Detalle (scanPrime=1)
   useEffect(() => {
     const tryStart = () => {
+      const prime = (() => { try { return sessionStorage.getItem('scanPrime') === '1'; } catch { return false; } })();
+      if (!prime) return; // ← exige venir de Detalle
       if (!camerasLoaded) return;
       if (started) return;
       if (autoStartProcessed) return;
@@ -125,7 +134,9 @@ export default function Scan() {
 
       setAutoStartProcessed(true);
       setReadyAt(Date.now() + 600);
-      handleStart().catch(err => console.error('autostart (visibility/focus):', err));
+      handleStart()
+        .catch(err => console.error('autostart (visibility/focus):', err))
+        .finally(() => { try { sessionStorage.removeItem('scanPrime'); } catch {} });
     };
 
     document.addEventListener('visibilitychange', tryStart);
@@ -142,16 +153,21 @@ export default function Scan() {
     };
   }, [camerasLoaded, started, autoStartProcessed]);
 
-  // 🔄 Autostart automático al entrar en Scan (sin botón), una sola vez
+  // ✅ Autostart al entrar SOLO si venimos de Detalle (scanPrime=1)
   useEffect(() => {
-    if (autoStartProcessed) return;          // ya hicimos autostart (por query o por este efecto)
+    if (autoStartProcessed) return;
     if (!camerasLoaded) return;
+
+    const prime = (() => { try { return sessionStorage.getItem('scanPrime') === '1'; } catch { return false; } })();
+    if (!prime) return; // ← exige venir de Detalle
     if (document.visibilityState !== 'visible') return;
 
     setAutoStartProcessed(true);
     setReadyAt(Date.now() + 1000);
     const t = setTimeout(() => {
-      handleStart().catch((e) => console.error('Auto start on enter failed:', e));
+      handleStart()
+        .catch((e) => console.error('Auto start on enter failed:', e))
+        .finally(() => { try { sessionStorage.removeItem('scanPrime'); } catch {} });
     }, 300);
     return () => clearTimeout(t);
   }, [autoStartProcessed, camerasLoaded]);
@@ -353,7 +369,7 @@ export default function Scan() {
           </div>
 
           <div className="controls viewer__controls">
-            <label className="visually-hidden" htmlFor="cameraSelect">Cámara</label>
+            <label className="visualmente-hidden" htmlFor="cameraSelect">Cámara</label>
             <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
             <button id="btn-torch" disabled>Linterna</button>
           </div>
