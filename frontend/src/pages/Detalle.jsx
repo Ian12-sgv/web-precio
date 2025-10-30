@@ -107,7 +107,6 @@ export default function Detalle() {
       <div className="wrap">
         <div className="card d-card">
           <div className="d-toolbar">
-            <button className="d-btn" onClick={handleBack}>← Volver</button>
             <button className="d-btn d-btn-primary" onClick={handleGoToScan}>Escanear otro</button>
           </div>
 
@@ -147,17 +146,12 @@ export default function Detalle() {
         <div className="d-chips">
           {item.Referencia && (
             <div className="d-chip" title="Referencia">
-              <span className="d-chip-key">Ref</span>
-              <span className="d-chip-val">{item.Referencia}</span>
-              <button className="d-chip-copy" onClick={() => copy(item.Referencia, 'Referencia')} aria-label="Copiar referencia">⧉</button>
+              <span className="d-chip-key">Ref: </span>
+              
             </div>
           )}
           <div className="d-chip" title="Código de barras">
-            <span className="d-chip-key">EAN</span>
-            <span className="d-chip-val">{item.CodigoBarra || '—'}</span>
-            {item.CodigoBarra && (
-              <button className="d-chip-copy" onClick={() => copy(item.CodigoBarra, 'Código de barras')} aria-label="Copiar código de barras">⧉</button>
-            )}
+            <span className="d-chip-key">Código de barras: </span>
           </div>
         </div>
 
