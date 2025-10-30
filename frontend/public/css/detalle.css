@@ -79,7 +79,7 @@ a:hover{ text-decoration: underline; }
 
 /* Toolbar */
 .d-toolbar{
-  display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 8px; margin-top: 4px;
+  display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom: 8px; margin-top: 8px;
 }
 .d-toolbar-right{ display:flex; align-items:center; gap:10px; }
 
