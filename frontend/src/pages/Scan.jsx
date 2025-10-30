@@ -4,14 +4,30 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiBuscar } from '../lib/api';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
+const PREF_CAM_KEY = 'scan.prefCameraId'; // 🔒 cache local
+
 function Alert({ msg, kind = 'error', onHide }) {
   if (!msg) return null;
   const icon = kind === 'ok' ? '✅' : kind === 'warn' ? '⚠️' : '❌';
   return (
-    <div className={`alert ${kind === 'ok' ? 'alert--ok' : kind === 'warn' ? 'alert--warn' : 'alert--error'}`} role="alert">
-      <div className="alert__icon" aria-hidden="true">{icon}</div>
-      <div className="alert__text">{msg}</div>
-      <button className="btn-ghost" onClick={onHide}>Cerrar</button>
+    <div
+      className={`alert ${kind === 'ok' ? 'alert--ok' : kind === 'warn' ? 'alert--warn' : 'alert--error'}`}
+      role="alert"
+      style={{
+        borderRadius: 12,
+        padding: '12px 14px',
+        lineHeight: 1.4,
+        boxShadow: '0 6px 18px rgba(0,0,0,.12)',
+        display: 'flex',
+        alignItems: 'start',
+        gap: 10
+      }}
+    >
+      <div style={{ fontSize: 22, lineHeight: 1 }}>{icon}</div>
+      <div style={{ flex: 1 }}>{msg}</div>
+      <button className="btn-ghost" onClick={onHide} style={{ marginLeft: 8, style: { color: 'white' } }}>
+        Cerrar
+      </button>
     </div>
   );
 }
@@ -38,7 +54,7 @@ export default function Scan() {
   const [alert, setAlert] = useState('');
   const [alertKind, setAlertKind] = useState('error');
 
-  // Autostart
+  // 🔧 FIX: Usar estado en lugar de ref para controlar autostart
   const [autoStartProcessed, setAutoStartProcessed] = useState(false);
   const hasAutoStart = params.get('autostart') === '1';
 
@@ -51,7 +67,7 @@ export default function Scan() {
     return dbDown ? 'Fallo al consultar la base de datos' : 'Fallo en la consulta al servidor';
   }
 
-  // Enumerar cámaras (y preseleccionar trasera)
+  // Enumerar cámaras (y preseleccionar trasera o la cacheada)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -67,9 +83,23 @@ export default function Scan() {
           return;
         }
 
-        sel.innerHTML = devices.map(d => `<option value="${d.id}">${d.label || 'Cámara'}</option>`).join('');
-        const back = devices.find(d => /back|trás|rear|environment/i.test(d.label || ''));
-        const picked = back ? back.id : devices[0].id;
+        sel.innerHTML = devices
+          .map(d => `<option value="${d.id}">${d.label || 'Cámara'}</option>`)
+          .join('');
+
+        // 🔐 preferida desde cache si existe y sigue disponible
+        const cached = localStorage.getItem(PREF_CAM_KEY);
+        let picked = null;
+
+        if (cached && devices.some(d => d.id === cached)) {
+          picked = cached;
+        } else {
+          const back = devices.find(d => /back|trás|rear|environment/i.test(d.label || ''));
+          picked = back ? back.id : devices[0].id;
+          // si no había cache, la guardamos para futuro
+          localStorage.setItem(PREF_CAM_KEY, picked);
+        }
+
         sel.value = picked;
         setSelectedId(picked);
         setCamerasLoaded(true);
@@ -82,7 +112,7 @@ export default function Scan() {
     return () => { cancelled = true; };
   }, []);
 
-  // Autostart robusto
+  // 🔧 FIX: Autostart simplificado y más robusto
   useEffect(() => {
     if (!hasAutoStart || autoStartProcessed) return;
     if (!camerasLoaded) return;
@@ -90,23 +120,32 @@ export default function Scan() {
 
     setAutoStartProcessed(true);
 
+    // Limpiar el parámetro autostart del URL
     const newParams = new URLSearchParams(params);
     newParams.delete('autostart');
     setParams(newParams, { replace: true });
 
+    // Ventana de gracia y autostart con la cámara preferida
     setReadyAt(Date.now() + 1000);
     const timer = setTimeout(() => {
-      handleStart().catch((err) => console.error('Autostart failed:', err));
+      handleStart().catch((err) => {
+        console.error('Autostart failed:', err);
+      });
     }, 300);
+
     return () => clearTimeout(timer);
   }, [hasAutoStart, autoStartProcessed, camerasLoaded, params, setParams]);
 
-  // Limpieza al desmontar
+  // 🔧 FIX: Limpieza mejorada al desmontar
   useEffect(() => {
     return () => {
       (async () => {
-        try { if (html5QrCode?.isScanning) await html5QrCode.stop(); } catch {}
-        try { if (html5QrCode) await html5QrCode.clear(); } catch {}
+        try {
+          if (html5QrCode?.isScanning) await html5QrCode.stop();
+        } catch {}
+        try {
+          if (html5QrCode) await html5QrCode.clear();
+        } catch {}
         inFlightRef.current = false;
         startingRef.current = false;
         lastScanRef.current = { code: '', t: 0 };
@@ -114,30 +153,34 @@ export default function Scan() {
     };
   }, [html5QrCode]);
 
-  // Pasar del placeholder al reader dentro del visor
-  function showReaderInViewer() {
+  // Acomodar el contenedor del lector en el "hero"
+  function placeReaderInHero() {
     const reader = readerRef.current;
     const img = imgRef.current;
     if (!reader || !img) return;
-    img.classList.add('is-hidden');
+    const cs = getComputedStyle(img);
+    reader.style.width = cs.width;
+    reader.style.maxWidth = cs.maxWidth !== 'none' ? cs.maxWidth : cs.width;
+    try { img.replaceWith(reader); } catch {}
+    reader.classList.add('in-hero');
     reader.hidden = false;
     reader.setAttribute('aria-hidden','false');
   }
 
   async function ensureFreshInstance() {
     if (html5QrCode) {
-      try { if (html5QrCode.isScanning) await html5QrCode.stop(); } catch (e) { console.warn('stop:', e); }
-      try { await html5QrCode.clear(); } catch (e) { console.warn('clear:', e); }
+      try { if (html5QrCode.isScanning) await html5QrCode.stop(); } catch (e) { console.warn('Error stopping scanner:', e); }
+      try { await html5QrCode.clear(); } catch (e) { console.warn('Error clearing scanner:', e); }
       setHtml5QrCode(null);
     }
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise(resolve => setTimeout(resolve, 100));
     const h = new Html5Qrcode('reader');
     setHtml5QrCode(h);
     return h;
   }
 
   async function startCamera(deviceIdOrFacing) {
-    showReaderInViewer();
+    placeReaderInHero();
 
     if (startingRef.current) {
       console.log('Camera already starting, skipping...');
@@ -148,38 +191,58 @@ export default function Scan() {
     try {
       const h = await ensureFreshInstance();
 
+      const opts = {
+        fps: 15,
+        qrbox: 280,
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.ITF
+        ]
+      };
+
       const cameraSelector =
         (deviceIdOrFacing && typeof deviceIdOrFacing === 'string')
-          ? deviceIdOrFacing
+          ? { deviceId: { exact: deviceIdOrFacing } }  // 🎯 preferida exacta
           : { facingMode: 'environment' };
 
-      await h.start(
-        cameraSelector,
-        {
-          fps: 15,
-          qrbox: 280,
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.ITF
-          ]
-        },
-        onCode,
-        () => {}
-      );
-      setStarted(true);
+      // Intento 1: preferida exacta (si vino id)
+      try {
+        await h.start(cameraSelector, opts, onCode, () => {});
+        setStarted(true);
+        // 📝 si se inició con id, asegúralo en cache
+        if (typeof deviceIdOrFacing === 'string') {
+          localStorage.setItem(PREF_CAM_KEY, deviceIdOrFacing);
+        }
+        return;
+      } catch (err1) {
+        console.warn('No se pudo iniciar cámara preferida, fallback…', err1);
+        // Intento 2: fallback a trasera
+        try {
+          await h.start({ facingMode: 'environment' }, opts, onCode, () => {});
+          setStarted(true);
+          return;
+        } catch (err2) {
+          console.warn('Fallback environment falló, probando cualquier cámara…', err2);
+          // Intento 3: sin restricción (debería tomar la default)
+          await h.start({ facingMode: 'user' }, opts, onCode, () => {});
+          setStarted(true);
+        }
+      }
     } finally {
       startingRef.current = false;
     }
   }
 
   async function onCode(text) {
+    // ⛔ ignora lecturas durante la ventana de arranque
     if (Date.now() < readyAt) return;
 
+    // ⛔ evita peticiones concurrentes y repeticiones en <1.5s
     const now = Date.now();
     if (inFlightRef.current) return;
     if (lastScanRef.current.code === text && (now - lastScanRef.current.t) < 1500) return;
@@ -187,6 +250,7 @@ export default function Scan() {
     inFlightRef.current = true;
     lastScanRef.current = { code: text, t: now };
 
+    // ⏸️ pausa el escáner mientras consultas (evita múltiples callbacks)
     try { await html5QrCode?.pause?.(true); } catch {}
 
     try {
@@ -207,6 +271,7 @@ export default function Scan() {
         return;
       }
 
+      // ✅ parar antes de navegar para que no dispare otro onCode
       try { await html5QrCode?.stop(); } catch {}
       try { await html5QrCode?.clear(); } catch {}
 
@@ -229,7 +294,12 @@ export default function Scan() {
         throw new Error('El navegador requiere HTTPS/permiso para la cámara');
       }
       setReadyAt(Date.now() + 600);
-      await startCamera(sel?.value || selectedId || undefined);
+
+      // 🎛️ prioridad: select ▶ cache ▶ estado ▶ fallback
+      const cached = localStorage.getItem(PREF_CAM_KEY);
+      const idToUse = sel?.value || cached || selectedId || undefined;
+
+      await startCamera(idToUse);
     } catch (e) {
       console.error('startCamera error:', e);
       const msg = e?.name ? `${e.name}: ${e.message || ''}` : (e?.message || 'Error');
@@ -238,10 +308,13 @@ export default function Scan() {
   }
 
   async function handleChangeCamera(e) {
-    setSelectedId(e.target.value);
+    const id = e.target.value;
+    setSelectedId(id);
+    // 💾 guarda inmediatamente la preferida
+    try { localStorage.setItem(PREF_CAM_KEY, id); } catch {}
     if (!started) return;
     try { 
-      await startCamera(e.target.value); 
+      await startCamera(id); 
     } catch { 
       showAlert('No se pudo cambiar la cámara', 'warn'); 
     }
@@ -273,63 +346,46 @@ export default function Scan() {
   }
 
   return (
-    <section id="pane-scan" className="pane is-visible scan" role="region" aria-label="Escanear o ingresar código">
+    <>
+      <Alert msg={alert} kind={alertKind} onHide={hideAlert} />
 
-      <div className="scan__grid">
-        {/* VISOR */}
-        <div className="scan__viewer card">
-          <div className="viewer">
-            <img
-              ref={imgRef}
-              className="viewer__placeholder scan-illustration"
-              src="/svg/barcode.jpeg"
-              alt="Ilustración: escanea el código de barras"
-            />
-            <div id="reader" ref={readerRef} className="viewer__reader" hidden aria-hidden="true"></div>
-            <div className="viewer__overlay" aria-hidden="true" />
-          </div>
+      <section id="pane-scan" className="pane is-visible" role="region" aria-label="Escanear o ingresar código">
+        <div className="hero card">
+          <div className="hero__body">
+            <h2 className="hero__title">Apunta al código</h2>
 
-          <div className="controls viewer__controls">
-            <label className="visually-hidden" htmlFor="cameraSelect">Cámara</label>
-            <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
-            <button id="btn-torch" disabled>Linterna</button>
+            <img ref={imgRef} className="scan-illustration" src="/svg/barcode.jpeg" alt="Ilustración: escanea el código de barras" />
+
+            <div className="controls" style={{marginTop:8}}>
+              <label className="visually-hidden" htmlFor="cameraSelect">Cámara</label>
+              <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
+              <button id="btn-torch" disabled>Linterna</button>
+            </div>
+
+            <div className="hero__actions" style={{gap:10, flexDirection:'column', alignItems:'flex-start'}}>
+              <button id="btn-start" className="btn-primary" onClick={handleStart}>
+                {started ? 'Reiniciar escaneo' : 'Iniciar escaneo'}
+              </button>
+
+              <div style={{display:'flex', gap:8, width:'100%', maxWidth:420}}>
+                <input id="manual-text"
+                  className="input-lg"
+                  type="search" inputMode="text" enterKeyHint="search"
+                  autoCapitalize="none" autoCorrect="off" spellCheck="false"
+                  placeholder="Escribe referencia o código y presiona Enter"
+                  onKeyDown={(e)=> e.key==='Enter' && handleManualSearch(e.currentTarget.value)}
+                  style={{flex:1}} />
+                <button id="btn-manual" className="btn-primary" type="button"
+                        onClick={()=>handleManualSearch(document.getElementById('manual-text').value)}>
+                  Buscar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* PANEL */}
-        <aside className="scan__panel card">
-          <Alert msg={alert} kind={alertKind} onHide={hideAlert} />
-
-          <button id="btn-start" className="btn-primary btn-block" onClick={handleStart} aria-pressed={started}>
-            {started ? 'Reiniciar escaneo' : 'Escanear codigo de barras para ver precios'}
-          </button>
-
-          <div className="input-group">
-            <label className="visually-hidden" htmlFor="manual-text">Referencia o código</label>
-            <input
-              id="manual-text"
-              className="input-lg"
-              type="search"
-              inputMode="text"
-              enterKeyHint="search"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck="false"
-              placeholder="escribe referencia O código"
-              onKeyDown={(e)=> e.key==='Enter' && handleManualSearch(e.currentTarget.value)}
-            />
-            <button
-              id="btn-manual"
-              className="btn"
-              type="button"
-              onClick={()=>handleManualSearch(document.getElementById('manual-text').value)}
-            >
-              Buscar
-            </button>
-          </div>
-
-        </aside>
-      </div>
-    </section>
+        <div id="reader" ref={readerRef} className="card reader" hidden aria-hidden="true"></div>
+      </section>
+    </>
   );
 }
