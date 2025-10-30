@@ -115,6 +115,33 @@ export default function Scan() {
     return () => clearTimeout(timer);
   }, [hasAutoStart, autoStartProcessed, camerasLoaded, params, setParams]);
 
+  // 🔁 Reintento de autostart al volver visible / foco / pageshow (bfcache)
+  useEffect(() => {
+    const tryStart = () => {
+      if (!camerasLoaded) return;
+      if (started) return;
+      if (autoStartProcessed) return;
+      if (document.visibilityState !== 'visible') return;
+
+      setAutoStartProcessed(true);
+      setReadyAt(Date.now() + 600);
+      handleStart().catch(err => console.error('autostart (visibility/focus):', err));
+    };
+
+    document.addEventListener('visibilitychange', tryStart);
+    window.addEventListener('focus', tryStart);
+    window.addEventListener('pageshow', tryStart); // back/forward cache
+
+    // intenta una vez por si ya estamos visibles
+    tryStart();
+
+    return () => {
+      document.removeEventListener('visibilitychange', tryStart);
+      window.removeEventListener('focus', tryStart);
+      window.removeEventListener('pageshow', tryStart);
+    };
+  }, [camerasLoaded, started, autoStartProcessed]);
+
   // 🔄 Autostart automático al entrar en Scan (sin botón), una sola vez
   useEffect(() => {
     if (autoStartProcessed) return;          // ya hicimos autostart (por query o por este efecto)
