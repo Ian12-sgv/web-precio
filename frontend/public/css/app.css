@@ -70,6 +70,7 @@ h1{ font-size:clamp(20px, 3.4vw, 28px); margin:8px 0 6px }
   border:1px solid var(--border);
   border-radius:14px;
   padding:12px;
+  margin: 8px;
   box-shadow: 0 0 0 1px rgba(79,70,229,0.05), 0 10px 30px rgba(0,0,0,.08);
 }
 
@@ -77,7 +78,7 @@ h1{ font-size:clamp(20px, 3.4vw, 28px); margin:8px 0 6px }
 .scan{ width:100%; max-width:1100px; margin:0 auto}
 .scan__header{ margin:4px 0 12px }
 .scan__grid{ display:grid; grid-template-columns: 2fr 1fr; gap:16px }
-@media (max-width: 900px){ .scan__grid{ grid-template-columns:1fr } }
+@media (max-width: 500px){ .scan__grid{ grid-template-columns:1fr } }
 
 /* Viewer */
 .viewer{

@@ -301,7 +301,7 @@ export default function Scan() {
         <aside className="scan__panel card">
           <Alert msg={alert} kind={alertKind} onHide={hideAlert} />
 
-          <button id="btn-start" className="btn-primary btn-block" onClick={handleStart} aria-pressed={started} style={{fontSize : "60%"}}>
+          <button id="btn-start" className="btn-primary btn-block" onClick={handleStart} aria-pressed={started} style={{fontSize : "100%"}}>
             {started ? 'Reiniciar escaneo' : 'Escanear código de barras para ver precios'}
           </button>
 
