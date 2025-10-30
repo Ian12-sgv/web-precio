@@ -301,12 +301,12 @@ export default function Scan() {
         <aside className="scan__panel card">
           <Alert msg={alert} kind={alertKind} onHide={hideAlert} />
 
-          <button id="btn-start" className="btn-primary btn-block" onClick={handleStart} aria-pressed={started}>
-            {started ? 'Reiniciar escaneo' : 'Iniciar escaneo'}
+          <button id="btn-start" className="btn-primary btn-block" onClick={handleStart} aria-pressed={started} style={{fontSize : "100%"}}>
+            {started ? 'Reiniciar escaneo' : 'scanear código de barras para ver precios'}
           </button>
 
           <div className="input-group">
-            <label className="visually-hidden" htmlFor="manual-text">Referencia o código</label>
+            <label className="visually-hidden" htmlFor="manual-text" >Referencia o código</label>
             <input
               id="manual-text"
               className="input-lg"
@@ -316,8 +316,8 @@ export default function Scan() {
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck="false"
-              placeholder="Escribe referencia o código"
-              onKeyDown={(e)=> e.key==='Enter' && handleManualSearch(e.currentTarget.value)}
+              placeholder="escribe referencia O código"
+              onKeyDown={(e)=> e.key==='Enter' && handleManualSearch(e.currentTarget.value)} style={{fontSize : "100%"}}
             />
             <button
               id="btn-manual"
