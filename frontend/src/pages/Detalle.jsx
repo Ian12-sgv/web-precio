@@ -133,13 +133,6 @@ export default function Detalle() {
     <div className="wrap">
       <div className="card d-card">
         {/* Toolbar */}
-        <div className="d-toolbar">
-          <div className="d-toolbar-right">
-            {copied && <div className="d-chip d-chip-ok" role="status" aria-live="polite">{copied}</div>}
-            <button className="d-btn d-btn-primary" onClick={handleGoToScan}>Escanear otro producto</button>
-          </div>
-        </div>
-
         {/* Título y chips */}
         <h2 className="d-title">{item.Nombre || 'Producto'}</h2>
         <div className="d-chips">
@@ -179,6 +172,12 @@ export default function Detalle() {
               <div className="d-v">{fmtCurrency(item.CostoPromedio, 'USD')}</div>
             </div>
           )}
+                  <div className="d-toolbar">
+          <div className="d-toolbar-right">
+            {copied && <div className="d-chip d-chip-ok" role="status" aria-live="polite">{copied}</div>}
+            <button className="d-btn d-btn-primary" onClick={handleGoToScan}>Escanear otro producto</button>
+          </div>
+        </div>
           {hasExistencia && (
             <div className="d-kv">
               <div className="d-k">Existencia</div>
