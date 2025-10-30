@@ -137,7 +137,7 @@ a:hover{ text-decoration: underline; }
 @media (max-width: 560px){
   .d-grid{ grid-template-columns: 1fr; }
 }
-.d-kv{ display:grid; grid-template-columns: 180px 1fr; gap:10px 14px; align-items: baseline; }
+.d-kv{ display:grid; grid-template-columns: 180px 1fr; gap:10px 14px; align-items: baseline; margin-bottom: 8px;}
 @media (max-width: 560px){
   .d-kv{ grid-template-columns: 1fr; }
 }
