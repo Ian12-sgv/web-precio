@@ -274,7 +274,10 @@ export default function Scan() {
 
   return (
     <section id="pane-scan" className="pane is-visible scan" role="region" aria-label="Escanear o ingresar código">
-     
+      <header className="scan__header">
+        <h2 className="hero__title">Apunta al código</h2>
+        <p className="muted">Permite la cámara y acerca el código de barras.</p>
+      </header>
 
       <div className="scan__grid">
         {/* VISOR */}
@@ -301,12 +304,12 @@ export default function Scan() {
         <aside className="scan__panel card">
           <Alert msg={alert} kind={alertKind} onHide={hideAlert} />
 
-          <button id="btn-start" className="btn-primary btn-block" onClick={handleStart} aria-pressed={started} style={{fontSize : "100%"}}>
-            {started ? 'Reiniciar escaneo' : 'Escanear código de barras para ver precios'}
+          <button id="btn-start" className="btn-primary btn-block" onClick={handleStart} aria-pressed={started}>
+            {started ? 'Reiniciar escaneo' : 'Escanear codigo de barras para ver precios'}
           </button>
 
           <div className="input-group">
-            <label className="visually-hidden" htmlFor="manual-text" >Referencia o código</label>
+            <label className="visually-hidden" htmlFor="manual-text">Referencia o código</label>
             <input
               id="manual-text"
               className="input-lg"
@@ -317,7 +320,7 @@ export default function Scan() {
               autoCorrect="off"
               spellCheck="false"
               placeholder="escribe referencia O código"
-              onKeyDown={(e)=> e.key==='Enter' && handleManualSearch(e.currentTarget.value)} style={{fontSize : "100%"}}
+              onKeyDown={(e)=> e.key==='Enter' && handleManualSearch(e.currentTarget.value)}
             />
             <button
               id="btn-manual"
@@ -328,6 +331,8 @@ export default function Scan() {
               Buscar
             </button>
           </div>
+
+          <p className="muted small">Tip: puedes teclear y presionar Enter si no quieres usar la cámara.</p>
         </aside>
       </div>
     </section>
