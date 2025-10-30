@@ -274,10 +274,6 @@ export default function Scan() {
 
   return (
     <section id="pane-scan" className="pane is-visible scan" role="region" aria-label="Escanear o ingresar código">
-      <header className="scan__header">
-        <h2 className="hero__title">Apunta al código</h2>
-        <p className="muted">Permite la cámara y acerca el código de barras.</p>
-      </header>
 
       <div className="scan__grid">
         {/* VISOR */}
@@ -332,7 +328,6 @@ export default function Scan() {
             </button>
           </div>
 
-          <p className="muted small">Tip: puedes teclear y presionar Enter si no quieres usar la cámara.</p>
         </aside>
       </div>
     </section>

@@ -74,7 +74,7 @@ h1{ font-size:clamp(20px, 3.4vw, 28px); margin:8px 0 6px }
 }
 
 /* ─── Scan layout (nuevo) ───────────────────────────────────────── */
-.scan{ width:100%; max-width:1100px; margin:0 auto; padding:16px }
+.scan{ width:100%; max-width:1100px; margin:0 auto;}
 .scan__header{ margin:4px 0 12px }
 .scan__grid{ display:grid; grid-template-columns: 2fr 1fr; gap:16px }
 @media (max-width: 900px){ .scan__grid{ grid-template-columns:1fr } }
