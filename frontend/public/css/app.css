@@ -1,7 +1,7 @@
 /* ─── Tokens y tema auto ─────────────────────────────────────────── */
 :root{
-  color-scheme: light dark; /* adapta controles nativos */
-  /* LIGHT (por defecto) */
+  color-scheme: light dark;
+  /* LIGHT */
   --bg:#f5f6f8;
   --bg-grad1:#eef1ff;
   --bg-grad2:#e6f0ff;
@@ -10,16 +10,16 @@
   --text:#0b0c0f;
   --muted:#4b5563;
   --primary:#e54646;
-  --primary-hover:#e54646;
+  --primary-hover:#d63b3b;
   --border:#e5e7eb;
   --ok:#16a34a;
   --error:#dc2626;
+  --warn:#d97706;
   --link:#1d4ed8;
 }
 
 @media (prefers-color-scheme: dark){
   :root{
-    /* DARK */
     --bg:#0b0c0f;
     --bg-grad1:#1e2233;
     --bg-grad2:#1a1e2b;
@@ -28,10 +28,11 @@
     --text:#e7e9ee;
     --muted:#9aa3af;
     --primary:#e54646;
-    --primary-hover:#e54646;
+    --primary-hover:#f05a5a;
     --border:#242938;
     --ok:#16a34a;
-    --error:#dc2626;
+    --error:#ef4444;
+    --warn:#f59e0b;
     --link:#93b4ff;
   }
 }
@@ -54,6 +55,7 @@ body{
 a{ color:var(--link); text-decoration:none }
 a:hover{ text-decoration:underline }
 .muted{ color:var(--muted) }
+.small{ font-size:.9rem }
 h1{ font-size:clamp(20px, 3.4vw, 28px); margin:8px 0 6px }
 
 /* ─── Layout ─────────────────────────────────────────────────────── */
@@ -71,11 +73,44 @@ h1{ font-size:clamp(20px, 3.4vw, 28px); margin:8px 0 6px }
   box-shadow: 0 0 0 1px rgba(79,70,229,0.05), 0 10px 30px rgba(0,0,0,.08);
 }
 
-/* Reader */
-#reader{ width:100%; max-width:520px; margin:12px 0; border-radius:14px; overflow:hidden }
-#reader video{ width:100%; height:auto; display:block }
+/* ─── Scan layout (nuevo) ───────────────────────────────────────── */
+.scan{ width:100%; max-width:1100px; margin:0 auto; padding:16px }
+.scan__header{ margin:4px 0 12px }
+.scan__grid{ display:grid; grid-template-columns: 2fr 1fr; gap:16px }
+@media (max-width: 900px){ .scan__grid{ grid-template-columns:1fr } }
 
-/* Grid responsive */
+/* Viewer */
+.viewer{
+  position:relative;
+  aspect-ratio:16/9;
+  border:1px solid var(--border);
+  border-radius:14px;
+  background: linear-gradient(180deg, var(--surface), var(--card));
+  overflow:hidden;
+}
+.viewer__reader{
+  position:absolute; inset:0;
+}
+.viewer__reader video{ width:100%; height:100%; object-fit:cover; display:block }
+.viewer__placeholder{
+  position:absolute; inset:0;
+  display:grid; place-items:center;
+  padding:8px;
+}
+.viewer__placeholder.is-hidden{ display:none }
+.viewer__overlay{
+  position:absolute; inset:0; pointer-events:none;
+  box-shadow:0 0 0 9999px rgba(0,0,0,.25) inset;
+  border:2px dashed rgba(255,255,255,.35);
+  border-radius:10px;
+  margin:6%;
+}
+.viewer__controls{ margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+
+/* Reader (id para compatibilidad previa) */
+#reader{ width:100%; height:100% }
+
+/* Grid responsive anteriores */
 .row > .card{ flex:1; min-width:280px }
 .row > .card:nth-child(2){ min-width:320px; flex:2 }
 
@@ -91,18 +126,41 @@ select, input{
 }
 select:focus, input:focus{ border-color:var(--primary) }
 
-button{
+button, .btn{
   padding:9px 14px;
   border-radius:10px;
   border:1px solid transparent;
   background:var(--primary);
   color:white;
   cursor:pointer;
-  transition:transform .04s ease, background .18s ease;
+  transition:transform .04s ease, background .18s ease, opacity .18s ease;
 }
-button:hover{ background:var(--primary-hover) }
-button:active{ transform:translateY(1px) }
+button:hover, .btn:hover{ background:var(--primary-hover) }
+button:active, .btn:active{ transform:translateY(1px) }
 button[disabled]{ opacity:.6; cursor:not-allowed }
+
+/* Variantes de botón */
+.btn-primary{ background:var(--primary); color:#fff; border:1px solid transparent; padding:10px 14px; border-radius:10px; cursor:pointer }
+.btn-block{ width:100% }
+.btn-ghost{
+  background:transparent;
+  color:var(--text);
+  border:1px solid var(--border);
+}
+.btn-ghost:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
+
+/* Alert (nuevo) */
+.alert{
+  display:flex; gap:10px; align-items:flex-start;
+  border-radius:12px; padding:12px 14px; line-height:1.35;
+  box-shadow:0 6px 18px rgba(0,0,0,.12);
+  border:1px solid var(--border);
+}
+.alert__icon{ font-size:20px; line-height:1 }
+.alert__text{ flex:1 }
+.alert--ok{ background: color-mix(in srgb, var(--ok) 15%, transparent); border-color: color-mix(in srgb, var(--ok) 60%, transparent) }
+.alert--warn{ background: color-mix(in srgb, var(--warn) 15%, transparent); border-color: color-mix(in srgb, var(--warn) 60%, transparent) }
+.alert--error{ background: color-mix(in srgb, var(--error) 15%, transparent); border-color: color-mix(in srgb, var(--error) 60%, transparent) }
 
 /* Resultados */
 #result.ok{
@@ -127,50 +185,11 @@ th{
 tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 .table-scroll{ overflow:auto; max-width:100% }
 
-/* Mobile tuning */
-@media (max-width:520px){
-  .controls{ gap:6px }
-  button, select, input{ font-size:14px }
-  #reader{ max-width:100% }
-}
-
-/* ─── App look ───────────────────────────────────────────────────── */
-.appbar{ display:flex; align-items:center; justify-content:space-between; gap:12px }
-.appbar--tight{ padding:10px 12px }
-.appbar__left{ display:flex; align-items:center; gap:10px }
-.appbar__right{ display:flex; gap:10px; align-items:center }
-.logo svg{ fill:var(--primary) }
-.appbar__title{ font-weight:700; letter-spacing:.2px }
-.appbar__subtitle{ font-size:12px }
-
-/* Segmented control */
-.seg{ display:flex; padding:6px; gap:6px; border-radius:12px }
-.seg__btn{
-  flex:1; display:inline-flex; align-items:center; justify-content:center; gap:8px;
-  padding:10px 12px; border-radius:10px; background:var(--surface); border:1px solid var(--border);
-  color:var(--text); cursor:pointer;
-}
-.seg__btn svg{ fill:currentColor }
-.seg__btn.is-active{ background:var(--primary); color:#fff; border-color:transparent }
-
-/* Pane transitions */
-.pane{ display:block; opacity:0; transform:translateY(6px); transition:opacity .18s ease, transform .18s ease }
-.pane.is-visible{ opacity:1; transform:none }
-
-/* Hero */
+/* Hero / acciones (compat) */
 .hero{ gap:14px; align-items:flex-start; }
 .hero__icon svg{ fill:var(--primary) }
 .hero__title{ margin:4px 0 }
 .hero__actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:6px }
-
-/* Buttons + variants */
-.btn-primary{ background:var(--primary); color:#fff; border:1px solid transparent; padding:10px 14px; border-radius:10px; cursor:pointer; width: 100%; }
-.btn-primary:hover{ background:var(--primary-hover) }
-.btn-ghost{ background:red; border:1px solid var(--border); padding:10px 14px; border-radius:10px; cursor:pointer }
-.link{ color:var(--link) }
-
-/* Reader */
-.reader{ overflow:hidden; border-radius:14px }
 
 /* Forms */
 .form-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
@@ -181,13 +200,18 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 .input-lg:focus{ border-color:var(--primary) }
 .section-title{ margin:0 0 6px }
 
+/* Input group (nuevo) */
+.input-group{ display:flex; gap:8px; align-items:stretch; margin-top:8px }
+.input-group .input-lg{ flex:1 }
+.input-group .btn{ flex:none }
+
 /* Footer */
 .foot{ text-align:center; margin:12px 0 8px }
 
 /* A11y */
-.visually-hidden{ position:absolute !important; height:1px; width:10px; overflow:hidden; clip:rect(1px,1px,1px,1px) }
+.visually-hidden{ position:absolute !important; height:1px; width:1px; overflow:hidden; clip:rect(1px,1px,1px,1px) }
 
-/* ─── Landing ────────────────────────────────────────────────────── */
+/* ─── Landing y otros existentes ─────────────────────────────────── */
 .section{ margin:16px 0 24px }
 .hero-landing{
   display:grid; grid-template-columns:1.1fr 1fr; gap:18px; align-items:center;
@@ -241,21 +265,14 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 }
 
 .scan-illustration{
-  flex:1 1 280px;
-  /*max-width:420px;*/
   width:100%;
-  height:auto;
+  height:100%;
+  object-fit:cover;
   border-radius:14px;
-  border:1px solid var(--border);
-  background: linear-gradient(180deg, var(--surface), var(--card));
-  padding:8px;
+  border:0;
+  background: transparent;
+  padding:0;
 }
-.phone-card{
-  aspect-ratio:16/10; display:flex; align-items:center; justify-content:center;
-  background: linear-gradient(180deg, var(--surface), var(--card));
-  border:1px solid var(--border); border-radius:16px;
-}
-.phone-svg{ width:90%; max-width:520px; height:auto }
 @media (max-width:560px){
-  .scan-illustration{ max-width:100%; margin-top:8px }
+  .scan-illustration{ max-width:100%; margin-top:0 }
 }
