@@ -172,18 +172,19 @@ export default function Detalle() {
               <div className="d-v">{fmtCurrency(item.CostoPromedio, 'USD')}</div>
             </div>
           )}
-                  <div className="d-toolbar">
-          <div className="d-toolbar-right">
-            {copied && <div className="d-chip d-chip-ok" role="status" aria-live="polite">{copied}</div>}
-            <button className="d-btn d-btn-primary" onClick={handleGoToScan}>Escanear otro producto</button>
-          </div>
-        </div>
+          
           {hasExistencia && (
             <div className="d-kv">
               <div className="d-k">Existencia</div>
               <div className="d-v">{item.Existencia}</div>
             </div>
           )}
+        </div>
+                <div className="d-toolbar">
+          <div className="d-toolbar-right">
+            {copied && <div className="d-chip d-chip-ok" role="status" aria-live="polite">{copied}</div>}
+            <button className="d-btn d-btn-primary" onClick={handleGoToScan}>Escanear otro producto</button>
+          </div>
         </div>
 
         {/* Meta extra si viene */}
