@@ -72,7 +72,7 @@ export default function Detalle() {
       </div>
 
       <div className="actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-        <button className="btn-ghost" onClick={handleGoToScan}>
+        <button className="btn-ghost" onClick={handleGoToScan} style={{ color: 'white' }}>
           Escanear otro producto
         </button>
       </div>
