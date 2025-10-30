@@ -180,7 +180,7 @@ export default function Detalle() {
             </div>
           )}
         </div>
-                <div className="d-toolbar">
+        <div className="d-toolbar">
           <div className="d-toolbar-right">
             {copied && <div className="d-chip d-chip-ok" role="status" aria-live="polite">{copied}</div>}
             <button className="d-btn d-btn-primary" onClick={handleGoToScan}>Escanear otro producto</button>
