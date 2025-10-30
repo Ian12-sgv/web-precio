@@ -371,7 +371,6 @@ export default function Scan() {
           <div className="controls viewer__controls">
             <label className="visualmente-hidden" htmlFor="cameraSelect">Cámara</label>
             <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
-            <button id="btn-torch" disabled>Linterna</button>
           </div>
         </div>
 
@@ -380,7 +379,7 @@ export default function Scan() {
           <Alert msg={alert} kind={alertKind} onHide={hideAlert} />
 
           <button id="btn-start" className="btn-primary btn-block" onClick={handleStart} aria-pressed={started}>
-            {started ? 'Reiniciar escaneo' : 'Escanear codigo de barras para ver precios'}
+            {started ? 'Escanear codigo de barras para ver precios' : 'Escanear codigo de barras para ver precios'}
           </button>
 
           <div className="input-group">
