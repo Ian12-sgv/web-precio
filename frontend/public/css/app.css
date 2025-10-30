@@ -158,7 +158,7 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 .pane.is-visible{ opacity:1; transform:none }
 
 /* Hero */
-.hero{ display:flex; gap:14px; align-items:flex-start; }
+.hero{ gap:14px; align-items:flex-start; }
 .hero__icon svg{ fill:var(--primary) }
 .hero__title{ margin:4px 0 }
 .hero__actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:6px }
