@@ -371,7 +371,6 @@ export default function Scan() {
           <div className="controls viewer__controls">
             <label className="visualmente-hidden" htmlFor="cameraSelect">Cámara</label>
             <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
-            <button id="btn-torch" disabled>Linterna</button>
           </div>
         </div>
 
