@@ -208,50 +208,87 @@ export default function Scan() {
   }
 
   async function startCamera(deviceIdOrFacing) {
-    showReaderInViewer();
+  showReaderInViewer();
 
-    if (startingRef.current) {
-      console.log('Camera already starting, skipping...');
-      return;
+  if (startingRef.current) {
+    console.log('Camera already starting, skipping...');
+    return;
+  }
+  startingRef.current = true;
+
+  try {
+    const h = await ensureFreshInstance();
+
+    const opts = {
+      fps: 15,
+      qrbox: 280,
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.QR_CODE,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.ITF
+      ]
+    };
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+
+    // 1) En iOS: prioriza arrancar con facingMode (permite permiso/previa inicialización)
+    if (isIOS) {
+      try {
+        await h.start({ facingMode: 'environment' }, opts, onCode, () => {});
+        setStarted(true);
+        // Si nos pasaron un ID concreto y ya hay permiso, intenta cambiar a esa cámara
+        if (typeof deviceIdOrFacing === 'string' && deviceIdOrFacing) {
+          try { await h.stop(); } catch {}
+          try {
+            await h.start({ deviceId: { exact: deviceIdOrFacing } }, opts, onCode, () => {});
+            setStarted(true);
+            try { localStorage.setItem(PREF_CAM_KEY, deviceIdOrFacing); } catch {}
+          } catch (e) {
+            console.warn('No se pudo iniciar con deviceId en iOS, seguimos con environment:', e);
+          }
+        }
+        return;
+      } catch (e) {
+        console.warn('iOS environment start falló, probando con user/backups:', e);
+        // Fallback extra por si environment fallara (raro)
+        await h.start({ facingMode: 'user' }, opts, onCode, () => {});
+        setStarted(true);
+        return;
+      }
     }
-    startingRef.current = true;
+
+    // 2) Otros navegadores (Android/desktop): intenta con el ID exacto si viene, y haz fallback
+    const primarySel =
+      (deviceIdOrFacing && typeof deviceIdOrFacing === 'string')
+        ? { deviceId: { exact: deviceIdOrFacing } }
+        : { facingMode: 'environment' };
 
     try {
-      const h = await ensureFreshInstance();
-
-      const cameraSelector =
-        (deviceIdOrFacing && typeof deviceIdOrFacing === 'string')
-          ? deviceIdOrFacing
-          : { facingMode: 'environment' };
-
-      await h.start(
-        cameraSelector,
-        {
-          fps: 15,
-          qrbox: 280,
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.ITF
-          ]
-        },
-        onCode,
-        () => {}
-      );
+      await h.start(primarySel, opts, onCode, () => {});
       setStarted(true);
-
-      // 💾 si arrancó con id concreto, persiste como preferido
       if (typeof deviceIdOrFacing === 'string') {
         try { localStorage.setItem(PREF_CAM_KEY, deviceIdOrFacing); } catch {}
       }
-    } finally {
-      startingRef.current = false;
+    } catch (err1) {
+      console.warn('No se pudo iniciar con selección primaria, fallback a environment…', err1);
+      try {
+        await h.start({ facingMode: 'environment' }, opts, onCode, () => {});
+        setStarted(true);
+      } catch (err2) {
+        console.warn('Fallback environment falló, probando cámara frontal…', err2);
+        await h.start({ facingMode: 'user' }, opts, onCode, () => {});
+        setStarted(true);
+      }
     }
+  } finally {
+    startingRef.current = false;
   }
+  }
+
 
   async function onCode(text) {
     if (Date.now() < readyAt) return;
