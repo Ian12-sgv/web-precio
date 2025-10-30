@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiBuscar } from '../lib/api';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
-const PREF_CAM_KEY = 'scan.prefCameraId'; // 🔐 clave de cámara preferida en localStorage
+const PREF_CAM_KEY = 'scan.prefCameraId'; // 🔐 cámara preferida
 
 function Alert({ msg, kind = 'error', onHide }) {
   if (!msg) return null;
@@ -53,7 +53,7 @@ export default function Scan() {
     return dbDown ? 'Fallo al consultar la base de datos' : 'Fallo en la consulta al servidor';
   }
 
-  // Enumerar cámaras (respetando la preferida en cache y preseleccionando trasera como fallback)
+  // Enumerar cámaras (preferida en cache → trasera → primera)
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -71,7 +71,7 @@ export default function Scan() {
 
         sel.innerHTML = devices.map(d => `<option value="${d.id}">${d.label || 'Cámara'}</option>`).join('');
 
-        // 🧠 preferida desde cache si existe y sigue disponible
+        // 🧠 tomar la cache si existe y está disponible
         const cached = (() => { try { return localStorage.getItem(PREF_CAM_KEY); } catch { return null; } })();
         let picked = null;
 
@@ -80,7 +80,7 @@ export default function Scan() {
         } else {
           const back = devices.find(d => /back|trás|rear|environment/i.test(d.label || ''));
           picked = back ? back.id : devices[0].id;
-          // si no había cache previa, guardamos la que elegimos por ti
+          // guarda la primera elección para próximas visitas
           try { localStorage.setItem(PREF_CAM_KEY, picked); } catch {}
         }
 
@@ -96,7 +96,7 @@ export default function Scan() {
     return () => { cancelled = true; };
   }, []);
 
-  // Autostart robusto
+  // Autostart por query (?autostart=1) – tu lógica original
   useEffect(() => {
     if (!hasAutoStart || autoStartProcessed) return;
     if (!camerasLoaded) return;
@@ -115,6 +115,20 @@ export default function Scan() {
     return () => clearTimeout(timer);
   }, [hasAutoStart, autoStartProcessed, camerasLoaded, params, setParams]);
 
+  // 🔄 Autostart automático al entrar en Scan (sin botón), una sola vez
+  useEffect(() => {
+    if (autoStartProcessed) return;          // ya hicimos autostart (por query o por este efecto)
+    if (!camerasLoaded) return;
+    if (document.visibilityState !== 'visible') return;
+
+    setAutoStartProcessed(true);
+    setReadyAt(Date.now() + 1000);
+    const t = setTimeout(() => {
+      handleStart().catch((e) => console.error('Auto start on enter failed:', e));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [autoStartProcessed, camerasLoaded]);
+
   // Limpieza al desmontar
   useEffect(() => {
     return () => {
@@ -128,7 +142,7 @@ export default function Scan() {
     };
   }, [html5QrCode]);
 
-  // Pasar del placeholder al reader dentro del visor
+  // Mostrar el reader dentro del visor
   function showReaderInViewer() {
     const reader = readerRef.current;
     const img = imgRef.current;
@@ -187,7 +201,7 @@ export default function Scan() {
       );
       setStarted(true);
 
-      // 💾 si arrancó con un id concreto, persiste como preferido
+      // 💾 si arrancó con id concreto, persiste como preferido
       if (typeof deviceIdOrFacing === 'string') {
         try { localStorage.setItem(PREF_CAM_KEY, deviceIdOrFacing); } catch {}
       }
@@ -248,8 +262,6 @@ export default function Scan() {
         throw new Error('El navegador requiere HTTPS/permiso para la cámara');
       }
       setReadyAt(Date.now() + 600);
-
-      // ▶ prioridad: select actual → estado → (el autoselect ya cargó desde cache)
       await startCamera(sel?.value || selectedId || undefined);
     } catch (e) {
       console.error('startCamera error:', e);
@@ -261,7 +273,7 @@ export default function Scan() {
   async function handleChangeCamera(e) {
     const id = e.target.value;
     setSelectedId(id);
-    // 💾 guarda inmediatamente la preferida del usuario
+    // 💾 guarda inmediatamente la preferida
     try { localStorage.setItem(PREF_CAM_KEY, id); } catch {}
     if (!started) return;
     try { 
