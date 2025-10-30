@@ -2,10 +2,10 @@
 :root{
   color-scheme: light dark;
   /* LIGHT */
-  --bg:#f5f6f8;
-  --bg-grad1:#eef1ff;
+  --bg:#F7F7F7;
+  /*--bg-grad1:#eef1ff;
   --bg-grad2:#e6f0ff;
-  --card:#ffffff;
+  --card:#ffffff;*/
   --surface:#f7f8fb;
   --text:#0b0c0f;
   --muted:#4b5563;
@@ -64,14 +64,27 @@ h1{ font-size:clamp(20px, 3.4vw, 28px); margin:8px 0 6px }
 .row{ display:flex; gap:16px; flex-wrap:wrap }
 .spacer{ height:8px }
 
-/* Cards */
-.card{
-  background:linear-gradient(180deg, var(--surface) 0%, var(--card) 100%);
-  border:1px solid var(--border);
-  border-radius:14px;
-  padding:12px;
-  box-shadow: 0 0 0 1px rgba(79,70,229,0.05), 0 10px 30px rgba(0,0,0,.08);
+/* ─── Logo marca (nuevo) ─────────────────────────────────────────── */
+/* El contenedor del <picture> ocupa el 100% del ancho disponible
+   y redondea bordes. overflow:hidden asegura que el redondeado "corte" la imagen. */
+.brand-logo{
+  display:block;
+  width:100%;
+  border-radius:12px;
+  overflow:hidden;
 }
+
+/* La imagen usa todo el ancho del contenedor, mantiene proporción y hereda el redondeado */
+.brand-logo__img{
+  display:block;
+  width:100%;
+  height:auto;           /* evita deformación */
+  object-fit:contain;    /* si el contenedor forzara altura, no recorta */
+  border-radius:inherit; /* mantiene el redondeado del contenedor */
+}
+
+/* Si quieres que el título crezca y el logo pueda usar todo el ancho en una appbar flex */
+.appbar__title{ flex:1; }
 
 /* ─── Scan layout (nuevo) ───────────────────────────────────────── */
 .scan{ width:100%; max-width:1100px; margin:0 auto;}
