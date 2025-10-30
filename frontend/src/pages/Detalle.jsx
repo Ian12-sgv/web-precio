@@ -160,11 +160,11 @@ export default function Detalle() {
         {/* Datos principales */}
         <div className="d-grid">
           <div className="d-kv">
-            <div className="d-k">Costo (USD)</div>
+            
             <div className="d-v">{costoUSD}</div>
           </div>
           <div className="d-kv">
-            <div className="d-k">Precio (Bs.)</div>
+            
             <div className="d-v">{precioDetalVEF}</div>
           </div>
           {hasPrecioMayor && (
