@@ -242,7 +242,7 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 
 .scan-illustration{
   flex:1 1 280px;
-  max-width:420px;
+  /*max-width:420px;*/
   width:100%;
   height:auto;
   border-radius:14px;
