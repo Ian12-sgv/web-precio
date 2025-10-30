@@ -12,7 +12,6 @@ function Header() {
             <img src="/svg/logo white.svg" alt="Palacio del Blumer" style={{height:28, width:'auto', display:'block'}}/>
           </picture>
         </div>
-        <div className="appbar__subtitle muted">Consulta de precios</div>
       </div>
     </header>
   );
