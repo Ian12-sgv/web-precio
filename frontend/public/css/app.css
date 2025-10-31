@@ -21,8 +21,8 @@
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#0b0c0f;
-    --bg-grad1:#1e2233;
-    --bg-grad2:#1a1e2b;
+    --bg-grad1:#0b0c0f;
+    --bg-grad2:#0b0c0f;
     --card:#12141a;
     --surface:#161922;
     --text:#e7e9ee;

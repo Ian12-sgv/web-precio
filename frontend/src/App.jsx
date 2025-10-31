@@ -6,20 +6,26 @@ function Header() {
   return (
     <header className="appbar card appbar--tight">
       <div className="appbar__left">
-        <div className="appbar__title" style={{display:'flex', alignItems:'center', gap:8}}>
-  <picture className="brand-logo">
-    <img
-      src="/svg/logo white.jpg"
-      alt="Palacio del Blumer"
-      className="brand-logo__img"
-    />
-  </picture>
-</div>
-
+        <div className="appbar__title" style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <picture className="brand-logo">
+            {/* Logo negro SOLO en dark mode */}
+            <source
+              media="(prefers-color-scheme: dark)"
+              srcSet="/svg/logo-black.png" /* usa tu ruta real */
+            />
+            {/* Fallback (tema claro): logo blanco */}
+            <img
+              src="/svg/logo white.jpg"   /* usa tu ruta real */
+              alt="Palacio del Blumer"
+              className="brand-logo__img"
+            />
+          </picture>
+        </div>
       </div>
     </header>
   );
 }
+
 
 export default function App() {
   const loc = useLocation();
