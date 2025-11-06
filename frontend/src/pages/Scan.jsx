@@ -488,7 +488,6 @@ export default function Scan() {
           </button>
 
           <div className="input-group">
-            <label className="visualmente-hidden" htmlFor="manual-text">Referencia o código</label>
             <input
               id="manual-text"
               className="input-lg"
