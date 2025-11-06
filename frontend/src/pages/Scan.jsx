@@ -53,13 +53,15 @@ export default function Scan() {
     return dbDown ? 'Fallo al consultar la base de datos' : 'Fallo en la consulta al servidor';
   }
 
-  // 🔧 iOS patch: helpers y estado para cámara avanzada
+  // 👉 Largo alcance / iOS helpers
   const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const [longRange, setLongRange] = useState(true); // <-- MODO LARGO ALCANCE
   const [camTrack, setCamTrack] = useState(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1, value: 1 });
+  const failCountRef = useRef(0);
 
   // Enumerar cámaras (preferida en cache → trasera → primera)
   useEffect(() => {
@@ -79,7 +81,6 @@ export default function Scan() {
 
         sel.innerHTML = devices.map(d => `<option value="${d.id}">${d.label || 'Cámara'}</option>`).join('');
 
-        // 🧠 tomar la cache si existe y está disponible
         const cached = (() => { try { return localStorage.getItem(PREF_CAM_KEY); } catch { return null; } })();
         let picked = null;
 
@@ -88,7 +89,6 @@ export default function Scan() {
         } else {
           const back = devices.find(d => /back|trás|rear|environment/i.test(d.label || ''));
           picked = back ? back.id : devices[0].id;
-          // guarda la primera elección para próximas visitas
           try { localStorage.setItem(PREF_CAM_KEY, picked); } catch {}
         }
 
@@ -104,19 +104,15 @@ export default function Scan() {
     return () => { cancelled = true; };
   }, []);
 
-  // ✅ Autostart por query PERO solo si venimos de Detalle (scanPrime=1)
+  // Autostarts (tus efectos tal cual)
   useEffect(() => {
     if (!hasAutoStart || autoStartProcessed) return;
     if (!camerasLoaded) return;
-
     const prime = (() => { try { return sessionStorage.getItem('scanPrime') === '1'; } catch { return false; } })();
-    if (!prime) return; // ← exige venir de Detalle
-
+    if (!prime) return;
     if (document.visibilityState !== 'visible') return;
 
     setAutoStartProcessed(true);
-
-    // limpia ?autostart=1 del URL
     const newParams = new URLSearchParams(params);
     newParams.delete('autostart');
     setParams(newParams, { replace: true });
@@ -130,11 +126,10 @@ export default function Scan() {
     return () => clearTimeout(timer);
   }, [hasAutoStart, autoStartProcessed, camerasLoaded, params, setParams]);
 
-  // ✅ Reintento de autostart SOLO si venimos de Detalle (scanPrime=1)
   useEffect(() => {
     const tryStart = () => {
       const prime = (() => { try { return sessionStorage.getItem('scanPrime') === '1'; } catch { return false; } })();
-      if (!prime) return; // ← exige venir de Detalle
+      if (!prime) return;
       if (!camerasLoaded) return;
       if (started) return;
       if (autoStartProcessed) return;
@@ -146,14 +141,10 @@ export default function Scan() {
         .catch(err => console.error('autostart (visibility/focus):', err))
         .finally(() => { try { sessionStorage.removeItem('scanPrime'); } catch {} });
     };
-
     document.addEventListener('visibilitychange', tryStart);
     window.addEventListener('focus', tryStart);
-    window.addEventListener('pageshow', tryStart); // back/forward cache
-
-    // intenta una vez por si ya estamos visibles
+    window.addEventListener('pageshow', tryStart);
     tryStart();
-
     return () => {
       document.removeEventListener('visibilitychange', tryStart);
       window.removeEventListener('focus', tryStart);
@@ -161,13 +152,11 @@ export default function Scan() {
     };
   }, [camerasLoaded, started, autoStartProcessed]);
 
-  // ✅ Autostart al entrar SOLO si venimos de Detalle (scanPrime=1)
   useEffect(() => {
     if (autoStartProcessed) return;
     if (!camerasLoaded) return;
-
     const prime = (() => { try { return sessionStorage.getItem('scanPrime') === '1'; } catch { return false; } })();
-    if (!prime) return; // ← exige venir de Detalle
+    if (!prime) return;
     if (document.visibilityState !== 'visible') return;
 
     setAutoStartProcessed(true);
@@ -186,21 +175,14 @@ export default function Scan() {
       (async () => {
         try { if (html5QrCode?.isScanning) await html5QrCode.stop(); } catch {}
         try { if (html5QrCode) await html5QrCode.clear(); } catch {}
+        try { if (camTrack?.stop) camTrack.stop(); } catch {}
         inFlightRef.current = false;
         startingRef.current = false;
         lastScanRef.current = { code: '', t: 0 };
       })();
     };
-  }, [html5QrCode]);
+  }, [html5QrCode, camTrack]);
 
-  // 🔧 iOS patch: apagar track si existe al desmontar o cuando cambie
-  useEffect(() => {
-    return () => {
-      try { if (camTrack?.stop) camTrack.stop(); } catch {}
-    };
-  }, [camTrack]);
-
-  // Mostrar el reader dentro del visor
   function showReaderInViewer() {
     const reader = readerRef.current;
     const img = imgRef.current;
@@ -224,26 +206,23 @@ export default function Scan() {
 
   async function startCamera(deviceIdOrFacing) {
     showReaderInViewer();
-
-    if (startingRef.current) {
-      console.log('Camera already starting, skipping...');
-      return;
-    }
+    if (startingRef.current) return;
     startingRef.current = true;
 
     try {
       const h = await ensureFreshInstance();
-
       const cameraSelector =
         (deviceIdOrFacing && typeof deviceIdOrFacing === 'string')
           ? deviceIdOrFacing
           : { facingMode: 'environment' };
 
-      // 🔧 iOS patch: constraints de alta resolución + 16:9 y features
+      // 🔭 Largo alcance: más resolución, fotograma completo, fps mayores
       const cfg = {
-        fps: 15,
-        qrbox: 280,
+        fps: longRange ? 24 : 15,
+        // en largo alcance NO limitamos a caja: dejamos full-frame
+        ...(longRange ? {} : { qrbox: 280 }),
         rememberLastUsedCamera: true,
+        // usa BarcodeDetector si está (mejora 1D)
         experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         formatsToSupport: [
           Html5QrcodeSupportedFormats.QR_CODE,
@@ -254,59 +233,54 @@ export default function Scan() {
           Html5QrcodeSupportedFormats.CODE_39,
           Html5QrcodeSupportedFormats.ITF
         ],
-        ...(isIOS() ? {
-          videoConstraints: {
-            width:  { ideal: 1920 },
-            height: { ideal: 1080 },
-            aspectRatio: { ideal: 1.7777777778 }, // 16:9
-            facingMode: { ideal: 'environment' }
-          }
-        } : {})
+        // Pide más resolución; en iOS además forzamos 16:9
+        videoConstraints: {
+          width:  { ideal: longRange ? 2560 : 1920 },
+          height: { ideal: longRange ? 1440 : 1080 },
+          aspectRatio: isIOS() ? { ideal: 1.7777777778 } : undefined,
+          facingMode: { ideal: 'environment' }
+        }
       };
 
       await h.start(
         cameraSelector,
         cfg,
         onCode,
-        () => {}
+        onDecodeFailure // 👈 subimos zoom/foco si hay muchos fallos
       );
       setStarted(true);
 
-      // 💾 si arrancó con id concreto, persiste como preferido
       if (typeof deviceIdOrFacing === 'string') {
         try { localStorage.setItem(PREF_CAM_KEY, deviceIdOrFacing); } catch {}
       }
 
-      // 🔧 iOS patch: afinar foco/zoom/torch después de iniciar
-      if (isIOS()) {
-        await tuneIOSCamera();
-      }
+      // Afinar cámara (AF continuo, zoom inicial, torch)
+      await tuneCamera();
     } finally {
       startingRef.current = false;
     }
   }
 
-  // 🔧 iOS patch: afinación de cámara (autofocus/zoom/torch/tap-to-focus)
-  async function tuneIOSCamera() {
+  async function tuneCamera() {
     const video = document.querySelector('#reader video');
     const track = video?.srcObject?.getVideoTracks?.()[0];
     if (!track) return;
 
     setCamTrack(track);
-
     const caps = track.getCapabilities ? track.getCapabilities() : {};
     const advanced = [];
 
-    // Autofoco continuo o disparo único
+    // AF continuo o single-shot
     if (caps.focusMode && caps.focusMode.includes('continuous')) {
       advanced.push({ focusMode: 'continuous' });
     } else if (caps.focusMode && caps.focusMode.includes('single-shot')) {
       advanced.push({ focusMode: 'single-shot' });
     }
 
-    // Zoom inicial que ayuda al enfoque de códigos pequeños
+    // Zoom inicial: si largo alcance, arranca más cerca (2x–3x si se puede)
     if (caps.zoom) {
-      const initial = Math.min(Math.max(2, caps.zoom.min ?? 1), caps.zoom.max ?? 3);
+      const base = longRange ? 2.4 : 1.2;
+      const initial = Math.min(Math.max(base, caps.zoom.min ?? 1), caps.zoom.max ?? base);
       advanced.push({ zoom: initial });
       setZoomSupported(true);
       setZoomRange({
@@ -320,21 +294,21 @@ export default function Scan() {
       setZoomRange({ min: 1, max: 1, step: 0.1, value: 1 });
     }
 
-    // Exposición continua si está disponible
+    // Exposición
     if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
       advanced.push({ exposureMode: 'continuous' });
     }
 
-    // Torch (linterna)
+    // Torch
     setTorchSupported(!!caps.torch);
 
     if (advanced.length) {
-      try { await track.applyConstraints({ advanced }); } catch (e) { /* ignore */ }
+      try { await track.applyConstraints({ advanced }); } catch {}
     }
 
-    // Tap-to-focus si el hardware lo expone
+    // Tap-to-focus si hay pointsOfInterest
     if (caps.pointsOfInterest) {
-      const tap = async (ev) => {
+      video.onclick = async (ev) => {
         const r = video.getBoundingClientRect();
         const x = (ev.clientX - r.left) / r.width;
         const y = (ev.clientY - r.top) / r.height;
@@ -342,12 +316,27 @@ export default function Scan() {
           await track.applyConstraints({ advanced: [{ pointsOfInterest: [{ x, y }], focusMode: 'single-shot' }] });
         } catch {}
       };
-      // evita duplicar listeners simples
-      video.onclick = tap;
     }
   }
 
+  // Si falla muchas veces seguidas, sube un poco el zoom (útil para lejos)
+  async function onDecodeFailure(/* error */) {
+    failCountRef.current++;
+    if (!longRange) return;
+    if (!camTrack?.applyConstraints) return;
+    if (failCountRef.current % 20 !== 0) return; // cada ~20 frames fallidos
+
+    try {
+      const caps = camTrack.getCapabilities?.() || {};
+      if (!caps.zoom) return;
+      const next = Math.min((zoomRange.value || 1) + (caps.zoom.step ?? 0.2), caps.zoom.max ?? (zoomRange.value || 3));
+      await camTrack.applyConstraints({ advanced: [{ zoom: next }] });
+      setZoomRange(z => ({ ...z, value: next }));
+    } catch {}
+  }
+
   async function onCode(text) {
+    failCountRef.current = 0; // 👍 reset contador
     if (Date.now() < readyAt) return;
 
     const now = Date.now();
@@ -410,14 +399,9 @@ export default function Scan() {
   async function handleChangeCamera(e) {
     const id = e.target.value;
     setSelectedId(id);
-    // 💾 guarda inmediatamente la preferida
     try { localStorage.setItem(PREF_CAM_KEY, id); } catch {}
     if (!started) return;
-    try {
-      await startCamera(id);
-    } catch {
-      showAlert('No se pudo cambiar la cámara', 'warn');
-    }
+    try { await startCamera(id); } catch { showAlert('No se pudo cambiar la cámara', 'warn'); }
   }
 
   async function handleManualSearch(value) {
@@ -425,24 +409,13 @@ export default function Scan() {
     if (!texto) return;
     try {
       const json = await apiBuscar({ one:1, ...( /^\d+$/.test(texto) ? {barcode:texto} : {referencia:texto} ) });
-
-      if (!json || json.ok === false) {
-        showAlert(mapApiProblem(json || {}), 'error');
-        return;
-      }
-
+      if (!json || json.ok === false) { showAlert(mapApiProblem(json || {}), 'error'); return; }
       const rows = json?.data || [];
-      if (!rows.length) {
-        showAlert('Código de barra no encontrado', 'warn');
-        return;
-      }
-
+      if (!rows.length) { showAlert('Código de barra no encontrado', 'warn'); return; }
       const row = rows[0];
       if (row.Referencia) nav(`/detalle?referencia=${encodeURIComponent(row.Referencia)}`);
       else if (row.CodigoBarra) nav(`/detalle?barcode=${encodeURIComponent(row.CodigoBarra)}`);
-    } catch {
-      showAlert('Fallo en la consulta al servidor', 'error');
-    }
+    } catch { showAlert('Fallo en la consulta al servidor', 'error'); }
   }
 
   return (
@@ -466,7 +439,7 @@ export default function Scan() {
             <label className="visualmente-hidden" htmlFor="cameraSelect">Cámara</label>
             <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
 
-            {/* 🔧 iOS patch: linterna si se soporta */}
+            {/* 🔦 Linterna si se soporta */}
             {torchSupported && (
               <button
                 type="button"
@@ -485,7 +458,7 @@ export default function Scan() {
               </button>
             )}
 
-            {/* 🔧 iOS patch: control de zoom si se soporta */}
+            {/* 🔍 Zoom si se soporta */}
             {zoomSupported && (
               <input
                 type="range"
@@ -503,6 +476,22 @@ export default function Scan() {
                 title="Zoom"
               />
             )}
+
+            {/* 🎯 Modo Largo Alcance */}
+            <label style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={longRange}
+                onChange={async (e) => {
+                  setLongRange(e.target.checked);
+                  if (started) {
+                    // Reinicia con nueva config
+                    try { await startCamera(selectRef.current?.value || selectedId || undefined); } catch {}
+                  }
+                }}
+              />
+              Largo alcance
+            </label>
           </div>
         </div>
 
