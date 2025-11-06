@@ -439,25 +439,6 @@ export default function Scan() {
             <label className="visualmente-hidden" htmlFor="cameraSelect">Cámara</label>
             <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
 
-            {/* 🔦 Linterna si se soporta */}
-            {torchSupported && (
-              <button
-                type="button"
-                className="btn"
-                onClick={async () => {
-                  if (!camTrack) return;
-                  try {
-                    await camTrack.applyConstraints({ advanced: [{ torch: !torchOn }] });
-                    setTorchOn(!torchOn);
-                  } catch {}
-                }}
-                title="Linterna"
-                style={{ marginLeft: 8 }}
-              >
-                {torchOn ? 'Apagar linterna' : 'Encender linterna'}
-              </button>
-            )}
-
             {/* 🔍 Zoom si se soporta */}
             {zoomSupported && (
               <input
