@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { apiBuscar } from '../lib/api';
+import PriceCard from '../componente/PriceCard';
 
 export default function Detalle() {
   const [params] = useSearchParams();
@@ -132,34 +133,39 @@ export default function Detalle() {
   return (
     <div className="wrap">
       <div className="card d-card">
-        {/* Toolbar */}
         {/* Título y chips */}
         <h2 className="d-title">{item.Nombre || 'Producto'}</h2>
         <div className="d-chips">
           {item.Referencia && (
-            <div className="d-chip" title="Referencia">
+            <div className="d-chip" title="Referencia" onClick={() => copy(item.Referencia, 'Referencia')}>
               <span className="d-chip-key">Ref: </span>
               <span className="d-chip-val">{item.Referencia}</span>
-              
             </div>
           )}
-          <div className="d-chip" title="Código de barras">
+          <div className="d-chip" title="Código de barras" onClick={() => copy(item.CodigoBarra || '', 'Código')}>
             <span className="d-chip-key">Código de barras: </span>
             <span className="d-chip-val">{item.CodigoBarra || '—'}</span>
-           
           </div>
         </div>
 
-        {/* Datos principales */}
+        {/* === Cards de precio (usando PriceCard) === */}
+        <div className="d-price-grid">
+          <PriceCard
+            label="Costo USD"
+            value={costoUSD}
+            variant="usd"
+            onCopy={() => copy(costoUSD, 'Costo USD')}
+          />
+          <PriceCard
+            label="Precio Detal"
+            value={precioDetalVEF}
+            variant="ves"
+            onCopy={() => copy(precioDetalVEF, 'Precio VES')}
+          />
+        </div>
+
+        {/* Resto de atributos en grid compacto */}
         <div className="d-grid">
-          <div className="d-kv">
-            
-            <div className="d-v">{costoUSD}</div>
-          </div>
-          <div className="d-kv">
-            
-            <div className="d-v">{precioDetalVEF}</div>
-          </div>
           {hasPrecioMayor && (
             <div className="d-kv">
               <div className="d-k">Precio mayor</div>
@@ -172,7 +178,6 @@ export default function Detalle() {
               <div className="d-v">{fmtCurrency(item.CostoPromedio, 'USD')}</div>
             </div>
           )}
-          
           {hasExistencia && (
             <div className="d-kv">
               <div className="d-k">Existencia</div>
@@ -180,6 +185,7 @@ export default function Detalle() {
             </div>
           )}
         </div>
+
         <div className="d-toolbar">
           <div className="d-toolbar-right">
             {copied && <div className="d-chip d-chip-ok" role="status" aria-live="polite">{copied}</div>}
