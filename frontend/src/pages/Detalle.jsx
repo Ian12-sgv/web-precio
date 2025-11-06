@@ -10,7 +10,7 @@ export default function Detalle() {
   const [item, setItem] = useState(null);
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(''); // muestra “Copiado” breve
+  const [copied, setCopied] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -31,7 +31,7 @@ export default function Detalle() {
         if (!alive) return;
         setItem(rows[0] || null);
         setLoading(false);
-      } catch (e) {
+      } catch {
         if (!alive) return;
         setErr('Error consultando el servidor');
         setLoading(false);
@@ -41,25 +41,20 @@ export default function Detalle() {
     return () => { alive = false; };
   }, [params]);
 
-  // Helpers ---------------------------------------------------------
+  // Helpers
   const toNum = (v) => {
     const n = Number(String(v ?? '').replace(/[^\d.-]/g, ''));
     return Number.isFinite(n) ? n : null;
   };
-
   const fmtCurrency = (v, currency, min = 2) => {
     const n = toNum(v);
     if (n === null) return v ?? '—';
     try {
       return new Intl.NumberFormat('es-VE', {
-        style: 'currency',
-        currency,
-        minimumFractionDigits: min,
-        maximumFractionDigits: 2
+        style: 'currency', currency,
+        minimumFractionDigits: min, maximumFractionDigits: 2
       }).format(n);
-    } catch {
-      return n.toFixed(min);
-    }
+    } catch { return n.toFixed(min); }
   };
 
   const precioDetalVEF = useMemo(
@@ -72,24 +67,19 @@ export default function Detalle() {
   );
 
   async function handleGoToScan() {
-    // “Priming” de permiso en el gesto del usuario (este click)
     try {
       if (navigator.mediaDevices?.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } }
-        });
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal:'environment' } }});
         stream.getTracks().forEach(t => t.stop());
-        sessionStorage.setItem('scanPrime', '1');
+        sessionStorage.setItem('scanPrime','1');
       }
-    } catch { /* ignore */ }
-    navigate('/scan?autostart=1', { replace: true });
+    } catch {}
+    navigate('/scan?autostart=1', { replace:true });
   }
-
   function handleBack() {
     if (window.history.length > 1) navigate(-1);
     else navigate('/scan');
   }
-
   async function copy(text, label = 'Valor') {
     try {
       await navigator.clipboard?.writeText(String(text ?? ''));
@@ -101,21 +91,19 @@ export default function Detalle() {
     }
   }
 
-  // Render ----------------------------------------------------------
+  // Loading
   if (loading) {
     return (
       <div className="wrap">
         <div className="card d-card">
-          <div className="d-toolbar">
-            <button className="d-btn d-btn-primary" onClick={handleGoToScan}>Escanear otro</button>
+          <div className="d-hero">
+            <button className="d-btn d-btn-ghost" onClick={handleBack}>← Volver</button>
+            <button className="d-btn d-btn-primary" onClick={handleGoToScan}>▦ Escanear otro producto</button>
           </div>
-
           <div className="d-skel-title d-skeleton" />
           <div className="d-skel-grid">
-            <div className="d-skeleton" />
-            <div className="d-skeleton" />
-            <div className="d-skeleton" />
-            <div className="d-skeleton" />
+            <div className="d-skeleton" /><div className="d-skeleton" />
+            <div className="d-skeleton" /><div className="d-skeleton" />
           </div>
         </div>
       </div>
@@ -125,41 +113,61 @@ export default function Detalle() {
   if (err)   return <div className="wrap"><div className="notfound">{err}</div></div>;
   if (!item) return <div className="wrap"><div className="notfound">No se encontró el ítem solicitado.</div></div>;
 
-  const hasExistencia = item.Existencia != null && item.Existencia !== '';
-  const hasPrecioMayor = item.PrecioMayor != null && item.PrecioMayor !== '';
-  const hasCostoProm = item.CostoPromedio != null && item.CostoPromedio !== '';
+  const hasExistencia  = item.Existencia != null && item.Existencia !== '';
+  const hasPrecioMayor = item.PrecioMayor  != null && item.PrecioMayor  !== '';
+  const hasCostoProm   = item.CostoPromedio!= null && item.CostoPromedio!== '';
 
   return (
     <div className="wrap">
       <div className="card d-card">
-        {/* Toolbar */}
-        {/* Título y chips */}
-        <h2 className="d-title">{item.Nombre || 'Producto'}</h2>
-        <div className="d-chips">
-          {item.Referencia && (
-            <div className="d-chip" title="Referencia">
-              <span className="d-chip-key">Ref: </span>
-              <span className="d-chip-val">{item.Referencia}</span>
-              
-            </div>
-          )}
-          <div className="d-chip" title="Código de barras">
-            <span className="d-chip-key">Código de barras: </span>
-            <span className="d-chip-val">{item.CodigoBarra || '—'}</span>
-           
+
+        {/* ======= HERO (como imagen 1) ======= */}
+        <div className="d-hero">
+          <button className="d-btn d-btn-ghost" onClick={handleBack}>← Volver</button>
+          <button className="d-btn d-btn-primary" onClick={handleGoToScan}>▦ Escanear otro producto</button>
+        </div>
+
+        <div className="d-hero-body">
+          <h2 className="d-title-xl">{item.Nombre || 'Producto'}</h2>
+
+          <div className="d-chips">
+            {item.Referencia && (
+              <button className="d-badge" title="Referencia" onClick={() => copy(item.Referencia, 'Referencia')}>
+                <span className="d-badge-ico">#</span>
+                <span className="d-badge-key">Ref:</span>
+                <span className="d-badge-val">{item.Referencia}</span>
+                <span className="d-badge-copy">⧉</span>
+              </button>
+            )}
+            <button className="d-badge" title="Código de barras" onClick={() => copy(item.CodigoBarra || '', 'Código')}>
+              <span className="d-badge-ico">▦</span>
+              <span className="d-badge-key">Código:</span>
+              <span className="d-badge-val">{item.CodigoBarra || '—'}</span>
+              <span className="d-badge-copy">⧉</span>
+            </button>
           </div>
         </div>
 
-        {/* Datos principales */}
-        <div className="d-grid">
-          <div className="d-kv">
-            
-            <div className="d-v">{costoUSD}</div>
+        {/* ======= CARDS DE PRECIOS ======= */}
+        <div className="d-price-grid">
+          <div className="d-price d-price--usd">
+            <div className="d-price-top">
+              <span className="d-price-ico">$</span>
+              <button className="d-copy" onClick={() => copy(costoUSD, 'Costo USD')} title="Copiar">⧉</button>
+            </div>
+            <div className="d-price-sub">Costo USD</div>
+            <div className="d-price-val">{costoUSD}</div>
           </div>
-          <div className="d-kv">
-            
-            <div className="d-v">{precioDetalVEF}</div>
+
+          <div className="d-price d-price--ves">
+            <div className="d-price-top">
+              <span className="d-price-ico">$</span>
+              <button className="d-copy" onClick={() => copy(precioDetalVEF, 'Precio VES')} title="Copiar">⧉</button>
+            </div>
+            <div className="d-price-sub">Precio Detal</div>
+            <div className="d-price-val">{precioDetalVEF}</div>
           </div>
+
           {hasPrecioMayor && (
             <div className="d-kv">
               <div className="d-k">Precio mayor</div>
@@ -172,7 +180,6 @@ export default function Detalle() {
               <div className="d-v">{fmtCurrency(item.CostoPromedio, 'USD')}</div>
             </div>
           )}
-          
           {hasExistencia && (
             <div className="d-kv">
               <div className="d-k">Existencia</div>
@@ -180,6 +187,8 @@ export default function Detalle() {
             </div>
           )}
         </div>
+
+        {/* Toolbar inferior */}
         <div className="d-toolbar">
           <div className="d-toolbar-right">
             {copied && <div className="d-chip d-chip-ok" role="status" aria-live="polite">{copied}</div>}
@@ -187,7 +196,7 @@ export default function Detalle() {
           </div>
         </div>
 
-        {/* Meta extra si viene */}
+        {/* Meta extra */}
         <div className="d-meta">
           {item.Categoria && <div><span className="muted">Categoría: </span>{item.Categoria}</div>}
           {item.Marca && <div><span className="muted">Marca: </span>{item.Marca}</div>}
