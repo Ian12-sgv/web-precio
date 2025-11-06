@@ -476,22 +476,6 @@ export default function Scan() {
                 title="Zoom"
               />
             )}
-
-            {/* 🎯 Modo Largo Alcance */}
-            <label style={{ marginLeft: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <input
-                type="checkbox"
-                checked={longRange}
-                onChange={async (e) => {
-                  setLongRange(e.target.checked);
-                  if (started) {
-                    // Reinicia con nueva config
-                    try { await startCamera(selectRef.current?.value || selectedId || undefined); } catch {}
-                  }
-                }}
-              />
-              Largo alcance
-            </label>
           </div>
         </div>
 
