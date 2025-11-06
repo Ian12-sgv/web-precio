@@ -72,7 +72,7 @@ a:hover{ text-decoration: underline; }
   max-width: 900px;
 }
 
-/* ---------- Estilos específicos Detalle (prefijo d-) ---------- */
+/* ---------- Nuevo: estilos específicos Detalle (prefijo d-) ---------- */
 
 .d-card{ padding: 18px; }
 .d-title{ margin: 2px 0 10px; font-size: clamp(20px, 2.6vw, 26px); font-weight: 700; }
@@ -83,7 +83,7 @@ a:hover{ text-decoration: underline; }
 }
 .d-toolbar-right{ display:flex; align-items:center; gap:10px; }
 
-/* Botones */
+/* Botones (aislados para no chocar con otros) */
 .d-btn{
   appearance: none;
   border: 1px solid var(--border);
@@ -168,7 +168,7 @@ a:hover{ text-decoration: underline; }
   .d-skel-grid{ grid-template-columns:1fr; }
 }
 
-/* Estados y utilidades */
+/* Estados y utilidades existentes */
 .notfound{
   border: 1px solid var(--danger);
   background: var(--danger-bg);
@@ -178,71 +178,3 @@ a:hover{ text-decoration: underline; }
 .mt-1{ margin-top: 8px; }
 .mt-2{ margin-top: 16px; }
 .mt-3{ margin-top: 24px; }
-
-/* ====== Cards de precio (PriceCard) ====== */
-.d-price-grid{
-  display:grid;
-  grid-template-columns: repeat(2, minmax(0,1fr));
-  gap:14px;
-  margin: 12px 0 6px;
-}
-@media (max-width: 680px){
-  .d-price-grid{ grid-template-columns: 1fr; }
-}
-
-.d-price{
-  position:relative;
-  border-radius:14px;
-  padding:16px;
-  border:1px solid var(--border);
-  box-shadow: var(--shadow);
-  background: color-mix(in srgb, var(--fg) 3%, transparent);
-}
-
-/* Variante azul (USD) */
-.d-price--usd{
-  background:
-    radial-gradient(120% 120% at 0% 0%,
-      color-mix(in srgb, var(--accent) 22%, transparent) 0%,
-      transparent 60%),
-    color-mix(in srgb, var(--fg) 3%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
-}
-
-/* Variante roja (VES) */
-.d-price--ves{
-  background:
-    radial-gradient(120% 120% at 0% 0%,
-      color-mix(in srgb, var(--primary) 22%, transparent) 0%,
-      transparent 60%),
-    color-mix(in srgb, var(--fg) 3%, transparent);
-  border-color: color-mix(in srgb, var(--primary) 36%, var(--border));
-}
-
-.d-price-top{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-}
-.d-price-ico{ font-weight:700; opacity:.9; }
-.d-price-sub{ color: var(--muted); margin-top:4px; font-size:.9rem; }
-.d-price-val{
-  margin-top:6px;
-  font-size: clamp(22px, 3.2vw, 30px);
-  font-weight: 800;
-}
-
-.d-copy{
-  appearance:none;
-  border:1px solid var(--border);
-  background:transparent;
-  color:var(--fg);
-  padding:6px 8px;
-  border-radius:8px;
-  cursor:pointer;
-  transition: background .15s ease;
-}
-.d-copy:hover{ background: rgba(0,0,0,.05); }
-@media (prefers-color-scheme: dark){
-  .d-copy:hover{ background: rgba(255,255,255,.06); }
-}
