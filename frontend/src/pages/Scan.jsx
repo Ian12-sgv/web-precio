@@ -55,12 +55,19 @@ export default function Scan() {
 
   // 👉 Largo alcance / iOS helpers
   const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const IS_IOS =
+    /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS
+
   const [longRange, setLongRange] = useState(true); // <-- MODO LARGO ALCANCE
   const [camTrack, setCamTrack] = useState(null);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+
+  // ⬇️ Zoom: habilitar solo en iOS
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1, value: 1 });
+
   const failCountRef = useRef(0);
 
   // Enumerar cámaras (preferida en cache → trasera → primera)
@@ -219,10 +226,8 @@ export default function Scan() {
       // 🔭 Largo alcance: más resolución, fotograma completo, fps mayores
       const cfg = {
         fps: longRange ? 24 : 15,
-        // en largo alcance NO limitamos a caja: dejamos full-frame
         ...(longRange ? {} : { qrbox: 280 }),
         rememberLastUsedCamera: true,
-        // usa BarcodeDetector si está (mejora 1D)
         experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         formatsToSupport: [
           Html5QrcodeSupportedFormats.QR_CODE,
@@ -233,7 +238,6 @@ export default function Scan() {
           Html5QrcodeSupportedFormats.CODE_39,
           Html5QrcodeSupportedFormats.ITF
         ],
-        // Pide más resolución; en iOS además forzamos 16:9
         videoConstraints: {
           width:  { ideal: longRange ? 2560 : 1920 },
           height: { ideal: longRange ? 1440 : 1080 },
@@ -246,7 +250,7 @@ export default function Scan() {
         cameraSelector,
         cfg,
         onCode,
-        onDecodeFailure // 👈 subimos zoom/foco si hay muchos fallos
+        onDecodeFailure
       );
       setStarted(true);
 
@@ -254,7 +258,7 @@ export default function Scan() {
         try { localStorage.setItem(PREF_CAM_KEY, deviceIdOrFacing); } catch {}
       }
 
-      // Afinar cámara (AF continuo, zoom inicial, torch)
+      // Afinar cámara (AF/exp para todos; zoom/torch solo iOS)
       await tuneCamera();
     } finally {
       startingRef.current = false;
@@ -270,15 +274,20 @@ export default function Scan() {
     const caps = track.getCapabilities ? track.getCapabilities() : {};
     const advanced = [];
 
-    // AF continuo o single-shot
+    // AF continuo o single-shot (para todos)
     if (caps.focusMode && caps.focusMode.includes('continuous')) {
       advanced.push({ focusMode: 'continuous' });
     } else if (caps.focusMode && caps.focusMode.includes('single-shot')) {
       advanced.push({ focusMode: 'single-shot' });
     }
 
-    // Zoom inicial: si largo alcance, arranca más cerca (2x–3x si se puede)
-    if (caps.zoom) {
+    // Exposición (para todos)
+    if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
+      advanced.push({ exposureMode: 'continuous' });
+    }
+
+    // 🔍 Zoom solo en iOS
+    if (IS_IOS && caps.zoom) {
       const base = longRange ? 2.4 : 1.2;
       const initial = Math.min(Math.max(base, caps.zoom.min ?? 1), caps.zoom.max ?? base);
       advanced.push({ zoom: initial });
@@ -294,12 +303,7 @@ export default function Scan() {
       setZoomRange({ min: 1, max: 1, step: 0.1, value: 1 });
     }
 
-    // Exposición
-    if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
-      advanced.push({ exposureMode: 'continuous' });
-    }
-
-    // Torch
+    // Torch (state) se mantiene, pero no hay UI; no afecta Android
     setTorchSupported(!!caps.torch);
 
     if (advanced.length) {
@@ -319,12 +323,13 @@ export default function Scan() {
     }
   }
 
-  // Si falla muchas veces seguidas, sube un poco el zoom (útil para lejos)
+  // Si falla muchas veces seguidas, sube un poco el zoom (solo iOS)
   async function onDecodeFailure(/* error */) {
     failCountRef.current++;
+    if (!IS_IOS) return;         // 👈 solo iOS
     if (!longRange) return;
     if (!camTrack?.applyConstraints) return;
-    if (failCountRef.current % 20 !== 0) return; // cada ~20 frames fallidos
+    if (failCountRef.current % 20 !== 0) return;
 
     try {
       const caps = camTrack.getCapabilities?.() || {};
@@ -439,8 +444,8 @@ export default function Scan() {
             <label className="visualmente-hidden" htmlFor="cameraSelect">Cámara</label>
             <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
 
-            {/* 🔍 Zoom si se soporta */}
-            {zoomSupported && (
+            {/* 🔍 Zoom SOLO en iOS */}
+            {IS_IOS && zoomSupported && (
               <input
                 type="range"
                 min={zoomRange.min}
