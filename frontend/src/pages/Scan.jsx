@@ -53,6 +53,14 @@ export default function Scan() {
     return dbDown ? 'Fallo al consultar la base de datos' : 'Fallo en la consulta al servidor';
   }
 
+  // 🔧 iOS patch: helpers y estado para cámara avanzada
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const [camTrack, setCamTrack] = useState(null);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const [zoomSupported, setZoomSupported] = useState(false);
+  const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1, value: 1 });
+
   // Enumerar cámaras (preferida en cache → trasera → primera)
   useEffect(() => {
     let cancelled = false;
@@ -185,6 +193,13 @@ export default function Scan() {
     };
   }, [html5QrCode]);
 
+  // 🔧 iOS patch: apagar track si existe al desmontar o cuando cambie
+  useEffect(() => {
+    return () => {
+      try { if (camTrack?.stop) camTrack.stop(); } catch {}
+    };
+  }, [camTrack]);
+
   // Mostrar el reader dentro del visor
   function showReaderInViewer() {
     const reader = readerRef.current;
@@ -224,21 +239,34 @@ export default function Scan() {
           ? deviceIdOrFacing
           : { facingMode: 'environment' };
 
+      // 🔧 iOS patch: constraints de alta resolución + 16:9 y features
+      const cfg = {
+        fps: 15,
+        qrbox: 280,
+        rememberLastUsedCamera: true,
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.ITF
+        ],
+        ...(isIOS() ? {
+          videoConstraints: {
+            width:  { ideal: 1920 },
+            height: { ideal: 1080 },
+            aspectRatio: { ideal: 1.7777777778 }, // 16:9
+            facingMode: { ideal: 'environment' }
+          }
+        } : {})
+      };
+
       await h.start(
         cameraSelector,
-        {
-          fps: 15,
-          qrbox: 280,
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.ITF
-          ]
-        },
+        cfg,
         onCode,
         () => {}
       );
@@ -248,8 +276,74 @@ export default function Scan() {
       if (typeof deviceIdOrFacing === 'string') {
         try { localStorage.setItem(PREF_CAM_KEY, deviceIdOrFacing); } catch {}
       }
+
+      // 🔧 iOS patch: afinar foco/zoom/torch después de iniciar
+      if (isIOS()) {
+        await tuneIOSCamera();
+      }
     } finally {
       startingRef.current = false;
+    }
+  }
+
+  // 🔧 iOS patch: afinación de cámara (autofocus/zoom/torch/tap-to-focus)
+  async function tuneIOSCamera() {
+    const video = document.querySelector('#reader video');
+    const track = video?.srcObject?.getVideoTracks?.()[0];
+    if (!track) return;
+
+    setCamTrack(track);
+
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    const advanced = [];
+
+    // Autofoco continuo o disparo único
+    if (caps.focusMode && caps.focusMode.includes('continuous')) {
+      advanced.push({ focusMode: 'continuous' });
+    } else if (caps.focusMode && caps.focusMode.includes('single-shot')) {
+      advanced.push({ focusMode: 'single-shot' });
+    }
+
+    // Zoom inicial que ayuda al enfoque de códigos pequeños
+    if (caps.zoom) {
+      const initial = Math.min(Math.max(2, caps.zoom.min ?? 1), caps.zoom.max ?? 3);
+      advanced.push({ zoom: initial });
+      setZoomSupported(true);
+      setZoomRange({
+        min: caps.zoom.min ?? 1,
+        max: caps.zoom.max ?? Math.max(3, initial),
+        step: caps.zoom.step ?? 0.1,
+        value: initial
+      });
+    } else {
+      setZoomSupported(false);
+      setZoomRange({ min: 1, max: 1, step: 0.1, value: 1 });
+    }
+
+    // Exposición continua si está disponible
+    if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
+      advanced.push({ exposureMode: 'continuous' });
+    }
+
+    // Torch (linterna)
+    setTorchSupported(!!caps.torch);
+
+    if (advanced.length) {
+      try { await track.applyConstraints({ advanced }); } catch (e) { /* ignore */ }
+    }
+
+    // Tap-to-focus si el hardware lo expone
+    if (caps.pointsOfInterest) {
+      const tap = async (ev) => {
+        const r = video.getBoundingClientRect();
+        const x = (ev.clientX - r.left) / r.width;
+        const y = (ev.clientY - r.top) / r.height;
+        try {
+          await track.applyConstraints({ advanced: [{ pointsOfInterest: [{ x, y }], focusMode: 'single-shot' }] });
+        } catch {}
+      };
+      // evita duplicar listeners simples
+      video.onclick = tap;
     }
   }
 
@@ -319,10 +413,10 @@ export default function Scan() {
     // 💾 guarda inmediatamente la preferida
     try { localStorage.setItem(PREF_CAM_KEY, id); } catch {}
     if (!started) return;
-    try { 
-      await startCamera(id); 
-    } catch { 
-      showAlert('No se pudo cambiar la cámara', 'warn'); 
+    try {
+      await startCamera(id);
+    } catch {
+      showAlert('No se pudo cambiar la cámara', 'warn');
     }
   }
 
@@ -371,6 +465,44 @@ export default function Scan() {
           <div className="controls viewer__controls">
             <label className="visualmente-hidden" htmlFor="cameraSelect">Cámara</label>
             <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
+
+            {/* 🔧 iOS patch: linterna si se soporta */}
+            {torchSupported && (
+              <button
+                type="button"
+                className="btn"
+                onClick={async () => {
+                  if (!camTrack) return;
+                  try {
+                    await camTrack.applyConstraints({ advanced: [{ torch: !torchOn }] });
+                    setTorchOn(!torchOn);
+                  } catch {}
+                }}
+                title="Linterna"
+                style={{ marginLeft: 8 }}
+              >
+                {torchOn ? 'Apagar linterna' : 'Encender linterna'}
+              </button>
+            )}
+
+            {/* 🔧 iOS patch: control de zoom si se soporta */}
+            {zoomSupported && (
+              <input
+                type="range"
+                min={zoomRange.min}
+                max={zoomRange.max}
+                step={zoomRange.step}
+                value={zoomRange.value}
+                onChange={async (e) => {
+                  const v = parseFloat(e.target.value);
+                  setZoomRange(z => ({ ...z, value: v }));
+                  try { await camTrack?.applyConstraints({ advanced: [{ zoom: v }] }); } catch {}
+                }}
+                style={{ width: 140, marginLeft: 8 }}
+                aria-label="Zoom"
+                title="Zoom"
+              />
+            )}
           </div>
         </div>
 
@@ -383,7 +515,7 @@ export default function Scan() {
           </button>
 
           <div className="input-group">
-            <label className="visually-hidden" htmlFor="manual-text">Referencia o código</label>
+            <label className="visualmente-hidden" htmlFor="manual-text">Referencia o código</label>
             <input
               id="manual-text"
               className="input-lg"
