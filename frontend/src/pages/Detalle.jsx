@@ -63,7 +63,7 @@ export default function Detalle() {
   };
 
   const precioDetalVEF = useMemo(
-    () => item ? fmtCurrency(item.PrecioDetal, 'VES') : '',
+    () => item ? fmtCurrency(item.PrecioDetalConIva, 'VES') : '',
     [item]
   );
   const costoUSD = useMemo(
@@ -158,7 +158,7 @@ export default function Detalle() {
           </div>
           <div className="d-kv">
             
-            <div className="d-v">{precioDetalVEF}</div>
+            <div className="d-v">{PrecioDetalConIvaVEF}</div>
           </div>
           {hasPrecioMayor && (
             <div className="d-kv">
