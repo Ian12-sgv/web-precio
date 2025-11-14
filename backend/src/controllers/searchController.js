@@ -40,7 +40,7 @@ module.exports.buscar = async (req, res, next) => {
     } else if (referencia) {
       modo = 'referencia';
       sqlText = `
-        SELECT TOP 50 Referencia, Nombre, PrecioDetal, CostoInicial, ${BARCODE_COL} AS CodigoBarra
+        SELECT TOP 1 Referencia, Nombre, PrecioDetal, CostoInicial, ${BARCODE_COL} AS CodigoBarra
         FROM dbo.INVENTARIO
         WHERE Referencia LIKE @filtro
         ORDER BY Referencia`;
