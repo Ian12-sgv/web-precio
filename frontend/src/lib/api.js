@@ -78,5 +78,23 @@ export async function apiBuscarPOST(params = {}) {
   return r.json();
 }
 
+/**
+ * 🔹 Tasa DETAL
+ * Espera que tu backend Node tenga un endpoint GET /api/tasa-detal
+ * que devuelva algo como: { valor: number, fecha: string }
+ */
+export async function apiTasaDetal({ signal } = {}) {
+  const r = await xfetch('/api/tasa-detal', { method: 'GET', signal });
+  if (!r.ok) {
+    let msg = `Error ${r.status}`;
+    try {
+      const j = await r.json();
+      msg = j?.error || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+  return r.json(); // { valor, fecha }
+}
+
 /* Para depurar/mostrar la URL base en la app si lo necesitas */
 export const API_URL = API_BASE;

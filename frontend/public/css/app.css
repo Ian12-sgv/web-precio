@@ -289,3 +289,84 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 @media (max-width:560px){
   .scan-illustration{ max-width:100%; margin-top:0 }
 }
+
+/* ====== Tasa dólar chip ====== */
+
+.tasa-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 0.75rem;
+  padding: 1rem;
+}
+
+.tasa-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;              /* estilo pill */
+  background: #0b0c0f;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  font-size: 0.9rem;
+}
+
+.tasa-card__left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tasa-card__icon {
+  font-size: 1.1rem;
+  color: #ef4444;                    /* rojo ícono $ */
+}
+
+.tasa-card__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.tasa-card__label {
+  font-weight: 500;
+}
+
+.tasa-card__date {
+  font-size: 0.75rem;
+  opacity: 0.75;
+}
+
+.tasa-card__date--error {
+  color: #f97373;                    /* rojito para error */
+}
+
+.tasa-card__right {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.tasa-card__trend {
+  font-size: 0.9rem;
+  color: #22c55e;                    /* verde flechita */
+}
+
+.tasa-card__value {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #22c55e;                    /* verde valor */
+}
+
+/* un pelín más compacto en móviles */
+@media (max-width: 480px) {
+  .tasa-card {
+    padding-inline: 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  .tasa-card__value {
+    font-size: 0.95rem;
+  }
+}

@@ -21,7 +21,7 @@ app.use(express.urlencoded({ extended: true }));
 
 /* CORS: permite front (Netlify) o * en dev */
 const ORIGIN = process.env.CORS_ORIGIN || '*';
-app.use(cors({ origin: ORIGIN }));
+app.use(cors({ origin: '*' }));
 app.use((req, res, next) => {
   // Para que los proxies no confundan cachés por origen
   res.set('Vary', 'Origin');
@@ -39,14 +39,60 @@ app.use((req, res, next) => {
   next();
 });
 
-/* Rutas API (prefijo /api) */
-app.get('/api/health', (_req, res) => res.json({ status:'ok', uptime:process.uptime() }));
+/* ========= Config tasa (API C#) ========= */
+const TASA_URL = process.env.TASA_API_URL;
+const TASA_KEY = process.env.TASA_API_KEY;
+
+/* ========= Rutas API (prefijo /api) ========= */
+app.get('/api/health', (_req, res) =>
+  res.json({ status: 'ok', uptime: process.uptime() })
+);
+
 app.get('/api/db/health', async (_req, res) => {
   try {
     const r = await query('SELECT 1 AS ok, DB_NAME() AS db, SYSTEM_USER AS userName');
-    res.json({ db:'up', result:r.recordset });
+    res.json({ db: 'up', result: r.recordset });
   } catch (e) {
-    res.status(500).json({ db:'down', error:e.message });
+    res.status(500).json({ db: 'down', error: e.message });
+  }
+});
+
+// 🔹 NUEVA: puente a la API de tasa en C#
+app.get('/api/tasa-detal', async (_req, res) => {
+  try {
+    if (!TASA_URL || !TASA_KEY) {
+      return res
+        .status(500)
+        .json({ error: 'Falta TASA_API_URL o TASA_API_KEY en backend .env' });
+    }
+
+    // usamos fetch global de Node 22 (no hace falta node-fetch)
+    const r = await fetch(TASA_URL, {
+      headers: {
+        'x-api-key': TASA_KEY,
+      },
+    });
+
+    if (!r.ok) {
+      return res
+        .status(502)
+        .json({ error: `Error al consultar tasa: HTTP ${r.status}` });
+    }
+
+    const data = await r.json();
+    const first = Array.isArray(data) ? data[0] : data;
+
+    if (!first) {
+      return res.status(404).json({ error: 'No se encontró tasa DETAL' });
+    }
+
+    const valor = first.Valor ?? first.valor;
+    const fecha = first.Fecha ?? first.fecha;
+
+    return res.json({ valor, fecha });
+  } catch (err) {
+    console.error('Error en /api/tasa-detal:', err);
+    return res.status(500).json({ error: 'Error interno consultando tasa' });
   }
 });
 
@@ -54,7 +100,7 @@ app.get('/api/db/health', async (_req, res) => {
 app.all(['/api/buscar', '/buscar', '/buscar.php'], buscar);
 
 /* 404 + errores */
-app.use((req, res) => res.status(404).json({ error:'Not Found' }));
+app.use((req, res) => res.status(404).json({ error: 'Not Found' }));
 app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ error: err.message || 'Server error' });

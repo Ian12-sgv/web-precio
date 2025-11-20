@@ -1,8 +1,8 @@
 // src/pages/Scan.jsx
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { apiBuscar } from '../lib/api';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { apiBuscar, apiTasaDetal } from '../lib/api';
 
 const PREF_CAM_KEY = 'scan.prefCameraId'; // 🔐 cámara preferida
 
@@ -82,6 +82,11 @@ export default function Scan() {
 
   const failCountRef = useRef(0);
 
+  // 🔹 Tasa DETAL (y estados de carga)
+  const [tasaDetal, setTasaDetal] = useState(null);
+  const [tasaLoading, setTasaLoading] = useState(true);
+  const [tasaError, setTasaError] = useState('');
+
   // Enumerar cámaras (preferida en cache → trasera → primera)
   useEffect(() => {
     let cancelled = false;
@@ -137,7 +142,38 @@ export default function Scan() {
     };
   }, []);
 
-  // Autostarts (tus efectos tal cual)
+  // 🔹 Cargar TASA DETAL desde la API Node (puente)
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchTasaDetal() {
+      setTasaLoading(true);
+      setTasaError('');
+
+      try {
+        const data = await apiTasaDetal(); // llama a /api/tasa-detal en tu backend Node
+        if (!cancelled) {
+          setTasaDetal(data); // { valor, fecha }
+          setTasaLoading(false);
+          console.log('Tasa DETAL cargada:', data);
+        }
+      } catch (err) {
+        console.error('Error obteniendo tasa detal', err);
+        if (!cancelled) {
+          setTasaError('No se pudo cargar la tasa del dólar');
+          setTasaLoading(false);
+        }
+      }
+    }
+
+    fetchTasaDetal();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Autostarts (como ya los tenías)
   useEffect(() => {
     if (!hasAutoStart || autoStartProcessed) return;
     if (!camerasLoaded) return;
@@ -334,7 +370,7 @@ export default function Scan() {
 
   async function tuneCamera() {
     const video = document.querySelector('#reader video');
-    const track = video?.srcObject?.getVideoTracks?.()[0];
+    const track = video?.srcObject?.getVideoTracks?.[0];
     if (!track) return;
 
     setCamTrack(track);
@@ -471,7 +507,6 @@ export default function Scan() {
       const row = rows[0];
       const scannedIsBarcode = /^\d+$/.test(text);
 
-      // ⬅️ AQUÍ la navegación se basa en el código de barras si se escaneó como tal
       if (scannedIsBarcode && row.CodigoBarra) {
         nav(`/detalle?barcode=${encodeURIComponent(row.CodigoBarra)}`);
       } else if (row.Referencia) {
@@ -557,6 +592,50 @@ export default function Scan() {
       role="region"
       aria-label="Escanear o ingresar código"
     >
+      {/* 🔹 BLOQUE ENTRE LOGO (HEADER) Y CÁMARA */}
+<div className="tasa-wrapper">
+  <div className="tasa-card card">
+    <div className="tasa-card__left">
+      <span className="tasa-card__icon">$</span>
+      <div className="tasa-card__text">
+        <span className="tasa-card__label">Tasa del Dólar</span>
+
+        {/* Fecha o mensajes debajo */}
+        {!tasaLoading && !tasaError && tasaDetal && (
+          <span className="tasa-card__date">
+            {(tasaDetal.fecha || '').split(' ')[0]}
+          </span>
+        )}
+        {tasaLoading && (
+          <span className="tasa-card__date">Cargando tasa...</span>
+        )}
+        {!tasaLoading && tasaError && (
+          <span className="tasa-card__date tasa-card__date--error">
+            {tasaError}
+          </span>
+        )}
+      </div>
+    </div>
+
+    <div className="tasa-card__right">
+      {/* Valor */}
+      {!tasaLoading && !tasaError && tasaDetal && (
+        <>
+          <span className="tasa-card__trend"></span>
+          <span className="tasa-card__value">
+            {Number(tasaDetal.valor).toFixed(2)}
+          </span>
+        </>
+      )}
+      {tasaLoading && <span className="tasa-card__value">···</span>}
+      {!tasaLoading && tasaError && (
+        <span className="tasa-card__value">—</span>
+      )}
+    </div>
+  </div>
+</div>
+
+
       <div className="scan__grid">
         {/* VISOR */}
         <div className="scan__viewer card">
@@ -628,7 +707,7 @@ export default function Scan() {
               : 'Escanear codigo de barras para ver precios'}
           </button>
 
-          <div className="input-group">
+          <div className="input-group" style={{ marginTop: 12 }}>
             <input
               id="manual-text"
               className="input-lg"
