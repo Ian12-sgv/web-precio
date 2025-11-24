@@ -77,8 +77,15 @@ export default function Scan() {
   const [torchOn, setTorchOn] = useState(false); // reservado si luego quieres UI de linterna
 
   // ⬇️ Zoom: habilitar solo en iOS
-  const [zoomSupported, setZoomSupported] = useState(false);
-  const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1, value: 1 });
+  // ⬇️ Zoom: barra visible en iOS aunque la cámara no exponga capabilities de zoom
+const [zoomSupported, setZoomSupported] = useState(IS_IOS);
+const [zoomRange, setZoomRange] = useState({
+  min: 1,
+  max: IS_IOS ? 3 : 1,
+  step: 0.1,
+  value: 1,
+});
+
 
   const failCountRef = useRef(0);
 
@@ -396,24 +403,39 @@ export default function Scan() {
     }
 
     // 🔍 Zoom solo en iOS
-    if (IS_IOS && caps.zoom) {
-      const base = longRange ? 2.4 : 1.2;
-      const initial = Math.min(
-        Math.max(base, caps.zoom.min ?? 1),
-        caps.zoom.max ?? base
-      );
-      advanced.push({ zoom: initial });
-      setZoomSupported(true);
-      setZoomRange({
-        min: caps.zoom.min ?? 1,
-        max: caps.zoom.max ?? Math.max(3, initial),
-        step: caps.zoom.step ?? 0.1,
-        value: initial
-      });
-    } else {
-      setZoomSupported(false);
-      setZoomRange({ min: 1, max: 1, step: 0.1, value: 1 });
-    }
+    // 🔍 Zoom solo en iOS
+if (IS_IOS) {
+  // Siempre mostramos slider en iOS
+  setZoomSupported(true);
+
+  if (caps.zoom) {
+    const base = longRange ? 2.4 : 1.2;
+    const initial = Math.min(
+      Math.max(base, caps.zoom.min ?? 1),
+      caps.zoom.max ?? base
+    );
+    advanced.push({ zoom: initial });
+    setZoomRange({
+      min: caps.zoom.min ?? 1,
+      max: caps.zoom.max ?? Math.max(3, initial),
+      step: caps.zoom.step ?? 0.1,
+      value: initial
+    });
+  } else {
+    // Sin soporte nativo de zoom: mantenemos un rango lógico para el slider
+    setZoomRange((z) => ({
+      ...z,
+      min: 1,
+      max: 3,
+      step: 0.1,
+      value: 1,
+    }));
+  }
+} else {
+  setZoomSupported(false);
+  setZoomRange({ min: 1, max: 1, step: 0.1, value: 1 });
+}
+
 
     if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
       advanced.push({ exposureMode: 'continuous' });
