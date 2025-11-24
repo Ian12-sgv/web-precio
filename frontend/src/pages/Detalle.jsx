@@ -47,19 +47,21 @@ export default function Detalle() {
     return Number.isFinite(n) ? n : null;
   };
 
+  // ⬇️ AQUÍ CAMBIAMOS LOS PREFIJOS: VES -> "Bs", USD -> "REF"
   const fmtCurrency = (v, currency, min = 2) => {
     const n = toNum(v);
     if (n === null) return v ?? '—';
-    try {
-      return new Intl.NumberFormat('es-VE', {
-        style: 'currency',
-        currency,
-        minimumFractionDigits: min,
-        maximumFractionDigits: 2
-      }).format(n);
-    } catch {
-      return n.toFixed(min);
-    }
+
+    const base = n.toLocaleString('es-VE', {
+      minimumFractionDigits: min,
+      maximumFractionDigits: 2,
+    });
+
+    if (currency === 'VES') return `Bs ${base}`;
+    if (currency === 'USD') return `REF ${base}`;
+
+    // por si algún día usas otro currency
+    return base;
   };
 
   const precioDetalVEF = useMemo(
@@ -125,54 +127,51 @@ export default function Detalle() {
   if (err)   return <div className="wrap"><div className="notfound">{err}</div></div>;
   if (!item) return <div className="wrap"><div className="notfound">No se encontró el ítem solicitado.</div></div>;
 
-  const hasExistencia = item.Existencia != null && item.Existencia !== '';
-  const hasPrecioMayor = item.PrecioMayor != null && item.PrecioMayor !== '';
-  const hasCostoProm = item.CostoPromedio != null && item.CostoPromedio !== '';
+  const hasExistencia  = item.Existencia    != null && item.Existencia    !== '';
+  const hasPrecioMayor = item.PrecioMayor   != null && item.PrecioMayor   !== '';
+  const hasCostoProm   = item.CostoPromedio != null && item.CostoPromedio !== '';
 
   return (
     <div className="wrap">
       <div className="card d-card">
-        {/* Toolbar */}
         {/* Título y chips */}
         <h2 className="d-title">{item.Nombre || 'Producto'}</h2>
         <div className="d-chips">
           {item.Referencia && (
             <div className="d-chip" title="Referencia">
-              <span className="d-chip-key">Ref: </span>
+              <span className="d-chip-key">Referencia: </span>
               <span className="d-chip-val">{item.Referencia}</span>
-              
             </div>
           )}
           <div className="d-chip" title="Código de barras">
-            <span className="d-chip-key">Código de barras: </span>
+            <span className="d-chip-key">Código de barra: </span>
             <span className="d-chip-val">{item.CodigoBarra || '—'}</span>
-           
           </div>
         </div>
 
         {/* Datos principales */}
         <div className="d-grid">
           <div className="d-kv">
-            
             <div className="d-v">{costoUSD}</div>
           </div>
           <div className="d-kv">
-            
             <div className="d-v">{precioDetalVEF}</div>
           </div>
+
           {hasPrecioMayor && (
             <div className="d-kv">
               <div className="d-k">Precio mayor</div>
               <div className="d-v">{fmtCurrency(item.PrecioMayor, 'VES')}</div>
             </div>
           )}
+
           {hasCostoProm && (
             <div className="d-kv">
               <div className="d-k">Costo promedio</div>
               <div className="d-v">{fmtCurrency(item.CostoPromedio, 'USD')}</div>
             </div>
           )}
-          
+
           {hasExistencia && (
             <div className="d-kv">
               <div className="d-k">Existencia</div>
@@ -180,10 +179,17 @@ export default function Detalle() {
             </div>
           )}
         </div>
+
         <div className="d-toolbar">
           <div className="d-toolbar-right">
-            {copied && <div className="d-chip d-chip-ok" role="status" aria-live="polite">{copied}</div>}
-            <button className="d-btn d-btn-primary" onClick={handleGoToScan}>Escanear otro producto</button>
+            {copied && (
+              <div className="d-chip d-chip-ok" role="status" aria-live="polite">
+                {copied}
+              </div>
+            )}
+            <button className="d-btn d-btn-primary" onClick={handleGoToScan}>
+              Escanear otro producto
+            </button>
           </div>
         </div>
 
