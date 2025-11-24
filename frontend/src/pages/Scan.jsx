@@ -724,8 +724,8 @@ if (IS_IOS) {
             aria-pressed={started}
           >
             {started
-              ? 'Escanear codigo de barras para ver precios'
-              : 'Escanear codigo de barras para ver precios'}
+              ? 'Haz clic aquí'
+              : 'Haz clic aquí'}
           </button>
 
           <div className="input-group" style={{ marginTop: 12 }}>
