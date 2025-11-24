@@ -382,7 +382,7 @@ const [zoomRange, setZoomRange] = useState({
 
   async function tuneCamera() {
     const video = document.querySelector('#reader video');
-    const track = video?.srcObject?.getVideoTracks?.[0];
+    const track = video?.srcObject?.getVideoTracks?.()[0];
     if (!track) return;
 
     setCamTrack(track);
