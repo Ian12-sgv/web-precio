@@ -331,6 +331,7 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 
 .tasa-card__label {
   font-weight: 500;
+  color: #eee;                    /* color texto */
 }
 
 .tasa-card__date {
