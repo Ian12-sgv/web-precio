@@ -80,7 +80,7 @@ export default function Scan() {
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1, value: 1 });
 
-  // 🔍 Enfoque: botón especial para iPhone
+  // 🔍 Enfoque: botón especial para iPhone (el estado ya no controla si se ve o no)
   const [focusSupported, setFocusSupported] = useState(false);
 
   const failCountRef = useRef(0);
@@ -380,12 +380,11 @@ export default function Scan() {
     const caps = track.getCapabilities ? track.getCapabilities() : {};
     const advanced = [];
 
-    // 👇 NUEVO: detectar si el dispositivo soporta enfoque (focus/pointsOfInterest)
+    // 👇 Detectar si el dispositivo soporta enfoque (focus/pointsOfInterest)
     const hasFocusModes = !!caps.focusMode;
     const hasPOI = !!caps.pointsOfInterest;
 
-    // ⚠️ Safari iOS muchas veces no expone estas capacidades, así que
-    // forzamos soporte de enfoque en iOS para que el botón se vea.
+    // Lo seguimos calculando por si luego lo quieres usar para lógica interna
     let supportsFocus = hasFocusModes || hasPOI;
     if (IS_IOS) {
       supportsFocus = true;
@@ -733,8 +732,8 @@ export default function Scan() {
               />
             )}
 
-            {/* 🎯 Botón de ajuste de enfoque SOLO iOS */}
-            {IS_IOS && focusSupported && (
+            {/* 🎯 Botón de ajuste de enfoque SIEMPRE en iOS */}
+            {IS_IOS && (
               <button
                 type="button"
                 className="btn"
