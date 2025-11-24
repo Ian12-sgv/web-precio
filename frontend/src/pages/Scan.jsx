@@ -80,6 +80,9 @@ export default function Scan() {
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1, value: 1 });
 
+  // 🔍 Enfoque: botón especial para iPhone
+  const [focusSupported, setFocusSupported] = useState(false);
+
   const failCountRef = useRef(0);
 
   // 🔹 Tasa DETAL (y estados de carga)
@@ -377,6 +380,11 @@ export default function Scan() {
     const caps = track.getCapabilities ? track.getCapabilities() : {};
     const advanced = [];
 
+    // 👇 NUEVO: detectar si el dispositivo soporta enfoque (focus/pointsOfInterest)
+    const hasFocusModes = !!caps.focusMode;
+    const hasPOI = !!caps.pointsOfInterest;
+    setFocusSupported(hasFocusModes || hasPOI);
+
     // AF continuo o single-shot (para todos)
     if (caps.focusMode && caps.focusMode.includes('continuous')) {
       advanced.push({ focusMode: 'continuous' });
@@ -430,6 +438,35 @@ export default function Scan() {
           });
         } catch {}
       };
+    }
+  }
+
+  // 🎯 NUEVO: Botón / acción para reenfocar al centro
+  async function handleRefocusCenter() {
+    try {
+      const video = document.querySelector('#reader video');
+      const track = camTrack;
+      if (!video || !track?.applyConstraints) return;
+
+      const caps = track.getCapabilities ? track.getCapabilities() : {};
+      const advanced = [];
+
+      if (caps.pointsOfInterest) {
+        // Enfocar al centro de la imagen
+        advanced.push({
+          pointsOfInterest: [{ x: 0.5, y: 0.5 }],
+          focusMode: 'single-shot'
+        });
+      } else if (caps.focusMode && caps.focusMode.includes('single-shot')) {
+        // Dispara un enfoque single-shot si no hay POI
+        advanced.push({ focusMode: 'single-shot' });
+      }
+
+      if (!advanced.length) return;
+
+      await track.applyConstraints({ advanced });
+    } catch (e) {
+      console.warn('Refocus error:', e);
     }
   }
 
@@ -688,6 +725,18 @@ export default function Scan() {
                 aria-label="Zoom"
                 title="Zoom"
               />
+            )}
+
+            {/* 🎯 Botón de ajuste de enfoque SOLO iOS y si hay soporte */}
+            {IS_IOS && focusSupported && (
+              <button
+                type="button"
+                className="btn"
+                style={{ marginLeft: 8 }}
+                onClick={handleRefocusCenter}
+              >
+                Ajustar enfoque
+              </button>
             )}
           </div>
         </div>
