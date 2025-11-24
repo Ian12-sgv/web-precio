@@ -383,7 +383,14 @@ export default function Scan() {
     // 👇 NUEVO: detectar si el dispositivo soporta enfoque (focus/pointsOfInterest)
     const hasFocusModes = !!caps.focusMode;
     const hasPOI = !!caps.pointsOfInterest;
-    setFocusSupported(hasFocusModes || hasPOI);
+
+    // ⚠️ Safari iOS muchas veces no expone estas capacidades, así que
+    // forzamos soporte de enfoque en iOS para que el botón se vea.
+    let supportsFocus = hasFocusModes || hasPOI;
+    if (IS_IOS) {
+      supportsFocus = true;
+    }
+    setFocusSupported(supportsFocus);
 
     // AF continuo o single-shot (para todos)
     if (caps.focusMode && caps.focusMode.includes('continuous')) {
@@ -726,7 +733,7 @@ export default function Scan() {
               />
             )}
 
-            {/* 🎯 Botón de ajuste de enfoque SOLO iOS y si hay soporte */}
+            {/* 🎯 Botón de ajuste de enfoque SOLO iOS */}
             {IS_IOS && focusSupported && (
               <button
                 type="button"
