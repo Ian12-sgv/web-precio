@@ -722,6 +722,7 @@ if (IS_IOS) {
             className="btn-primary btn-block"
             onClick={handleStart}
             aria-pressed={started}
+            style={{ fontSize: '100%' }}
           >
             {started
               ? 'Haz clic aquí'
