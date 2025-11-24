@@ -630,7 +630,7 @@ if (IS_IOS) {
     <div className="tasa-card__left">
       <span className="tasa-card__icon">$</span>
       <div className="tasa-card__text">
-        <span className="tasa-card__label">Tasa del Dólar</span>
+        <span className="tasa-card__label">Tasa del Dia</span>
 
         {/* Fecha o mensajes debajo */}
         {!tasaLoading && !tasaError && tasaDetal && (

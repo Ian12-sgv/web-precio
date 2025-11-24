@@ -357,7 +357,7 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 .tasa-card__value {
   font-weight: 700;
   font-size: 1.05rem;
-  color: #22c55e;                    /* verde valor */
+  color: #eee;                    /* verde valor */
 }
 
 /* un pelín más compacto en móviles */

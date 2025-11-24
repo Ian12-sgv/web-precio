@@ -87,9 +87,9 @@ app.get('/api/tasa-detal', async (_req, res) => {
     }
 
     const valor = first.Valor ?? first.valor;
-    const fecha = first.Fecha ?? first.fecha;
+  
 
-    return res.json({ valor, fecha });
+    return res.json({ valor });
   } catch (err) {
     console.error('Error en /api/tasa-detal:', err);
     return res.status(500).json({ error: 'Error interno consultando tasa' });
