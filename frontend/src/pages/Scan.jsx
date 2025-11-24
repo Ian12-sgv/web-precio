@@ -76,9 +76,15 @@ export default function Scan() {
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false); // reservado si luego quieres UI de linterna
 
-  // ⬇️ Zoom: barra para iOS
-  const [zoomSupported, setZoomSupported] = useState(false);
-  const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1, value: 1 });
+    // ⬇️ Zoom: barra para iOS (SIEMPRE visible en iPhone/iPad)
+  const [zoomSupported, setZoomSupported] = useState(IS_IOS);
+  const [zoomRange, setZoomRange] = useState({
+    min: 1,
+    max: IS_IOS ? 3 : 1,
+    step: 0.1,
+    value: 1,
+  });
+
 
   // 🔍 Enfoque: botón especial para iPhone
   const [focusSupported, setFocusSupported] = useState(false);
