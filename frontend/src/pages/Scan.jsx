@@ -76,11 +76,11 @@ export default function Scan() {
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false); // reservado si luego quieres UI de linterna
 
-  // ⬇️ Zoom: habilitar solo en iOS
+  // ⬇️ Zoom: barra para iOS
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1, value: 1 });
 
-  // 🔍 Enfoque: botón especial para iPhone (el estado ya no controla si se ve o no)
+  // 🔍 Enfoque: botón especial para iPhone
   const [focusSupported, setFocusSupported] = useState(false);
 
   const failCountRef = useRef(0);
@@ -380,11 +380,11 @@ export default function Scan() {
     const caps = track.getCapabilities ? track.getCapabilities() : {};
     const advanced = [];
 
-    // 👇 Detectar si el dispositivo soporta enfoque (focus/pointsOfInterest)
+    // 👇 NUEVO: detectar si el dispositivo soporta enfoque (focus/pointsOfInterest)
     const hasFocusModes = !!caps.focusMode;
     const hasPOI = !!caps.pointsOfInterest;
 
-    // Lo seguimos calculando por si luego lo quieres usar para lógica interna
+    // ⚠️ Safari iOS muchas veces no expone estas capacidades
     let supportsFocus = hasFocusModes || hasPOI;
     if (IS_IOS) {
       supportsFocus = true;
@@ -403,21 +403,26 @@ export default function Scan() {
       advanced.push({ exposureMode: 'continuous' });
     }
 
-    // 🔍 Zoom solo en iOS
-    if (IS_IOS && caps.zoom) {
-      const base = longRange ? 2.4 : 1.2;
-      const initial = Math.min(
-        Math.max(base, caps.zoom.min ?? 1),
-        caps.zoom.max ?? base
-      );
-      advanced.push({ zoom: initial });
-      setZoomSupported(true);
-      setZoomRange({
-        min: caps.zoom.min ?? 1,
-        max: caps.zoom.max ?? Math.max(3, initial),
-        step: caps.zoom.step ?? 0.1,
-        value: initial
-      });
+    // 🔍 Zoom: ahora SIEMPRE mostramos barra en iOS
+    if (IS_IOS) {
+      setZoomSupported(true); // 👈 fuerza mostrar el slider en iPhone/iPad
+      if (caps.zoom) {
+        const base = longRange ? 2.4 : 1.2;
+        const initial = Math.min(
+          Math.max(base, caps.zoom.min ?? 1),
+          caps.zoom.max ?? base
+        );
+        advanced.push({ zoom: initial });
+        setZoomRange({
+          min: caps.zoom.min ?? 1,
+          max: caps.zoom.max ?? Math.max(3, initial),
+          step: caps.zoom.step ?? 0.1,
+          value: initial
+        });
+      } else {
+        // Sin soporte nativo de zoom: usamos rango fijo 1–3 para zoom digital
+        setZoomRange({ min: 1, max: 3, step: 0.1, value: 1 });
+      }
     } else {
       setZoomSupported(false);
       setZoomRange({ min: 1, max: 1, step: 0.1, value: 1 });
@@ -447,7 +452,7 @@ export default function Scan() {
     }
   }
 
-  // 🎯 NUEVO: Botón / acción para reenfocar al centro
+  // 🎯 Botón / acción para reenfocar al centro
   async function handleRefocusCenter() {
     try {
       const video = document.querySelector('#reader video');
@@ -473,6 +478,41 @@ export default function Scan() {
       await track.applyConstraints({ advanced });
     } catch (e) {
       console.warn('Refocus error:', e);
+    }
+  }
+
+  // 🧭 Cambio de zoom desde la barra
+  async function handleZoomChange(e) {
+    const v = parseFloat(e.target.value);
+    setZoomRange((z) => ({ ...z, value: v }));
+
+    try {
+      const track = camTrack;
+      if (!track) {
+        // fallback solo visual
+        const video = document.querySelector('#reader video');
+        if (video) {
+          video.style.transform = `scale(${v})`;
+          video.style.transformOrigin = 'center center';
+        }
+        return;
+      }
+
+      const caps = track.getCapabilities ? track.getCapabilities() : {};
+
+      if (caps.zoom && track.applyConstraints) {
+        // zoom nativo de la cámara
+        await track.applyConstraints({ advanced: [{ zoom: v }] });
+      } else {
+        // zoom digital por CSS
+        const video = document.querySelector('#reader video');
+        if (video) {
+          video.style.transform = `scale(${v})`;
+          video.style.transformOrigin = 'center center';
+        }
+      }
+    } catch {
+      // ignorar errores silenciosamente
     }
   }
 
@@ -709,7 +749,7 @@ export default function Scan() {
               title="Cámara"
             />
 
-            {/* 🔍 Zoom SOLO en iOS */}
+            {/* 🔍 Barra de zoom SIEMPRE en iOS */}
             {IS_IOS && zoomSupported && (
               <input
                 type="range"
@@ -717,22 +757,14 @@ export default function Scan() {
                 max={zoomRange.max}
                 step={zoomRange.step}
                 value={zoomRange.value}
-                onChange={async (e) => {
-                  const v = parseFloat(e.target.value);
-                  setZoomRange((z) => ({ ...z, value: v }));
-                  try {
-                    await camTrack?.applyConstraints({
-                      advanced: [{ zoom: v }]
-                    });
-                  } catch {}
-                }}
+                onChange={handleZoomChange}
                 style={{ width: 140, marginLeft: 8 }}
                 aria-label="Zoom"
                 title="Zoom"
               />
             )}
 
-            {/* 🎯 Botón de ajuste de enfoque SIEMPRE en iOS */}
+            {/* 🎯 Botón de ajuste de enfoque en iOS */}
             {IS_IOS && (
               <button
                 type="button"
