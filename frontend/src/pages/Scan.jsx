@@ -76,18 +76,9 @@ export default function Scan() {
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchOn, setTorchOn] = useState(false); // reservado si luego quieres UI de linterna
 
-    // ⬇️ Zoom: barra para iOS (SIEMPRE visible en iPhone/iPad)
-  const [zoomSupported, setZoomSupported] = useState(IS_IOS);
-  const [zoomRange, setZoomRange] = useState({
-    min: 1,
-    max: IS_IOS ? 3 : 1,
-    step: 0.1,
-    value: 1,
-  });
-
-
-  // 🔍 Enfoque: botón especial para iPhone
-  const [focusSupported, setFocusSupported] = useState(false);
+  // ⬇️ Zoom: habilitar solo en iOS
+  const [zoomSupported, setZoomSupported] = useState(false);
+  const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1, value: 1 });
 
   const failCountRef = useRef(0);
 
@@ -361,7 +352,12 @@ export default function Scan() {
         }
       };
 
-      await h.start(cameraSelector, cfg, onCode, onDecodeFailure);
+      await h.start(
+        cameraSelector,
+        cfg,
+        onCode,
+        onDecodeFailure
+      );
       setStarted(true);
 
       if (typeof deviceIdOrFacing === 'string') {
@@ -386,17 +382,6 @@ export default function Scan() {
     const caps = track.getCapabilities ? track.getCapabilities() : {};
     const advanced = [];
 
-    // 👇 NUEVO: detectar si el dispositivo soporta enfoque (focus/pointsOfInterest)
-    const hasFocusModes = !!caps.focusMode;
-    const hasPOI = !!caps.pointsOfInterest;
-
-    // ⚠️ Safari iOS muchas veces no expone estas capacidades
-    let supportsFocus = hasFocusModes || hasPOI;
-    if (IS_IOS) {
-      supportsFocus = true;
-    }
-    setFocusSupported(supportsFocus);
-
     // AF continuo o single-shot (para todos)
     if (caps.focusMode && caps.focusMode.includes('continuous')) {
       advanced.push({ focusMode: 'continuous' });
@@ -404,34 +389,34 @@ export default function Scan() {
       advanced.push({ focusMode: 'single-shot' });
     }
 
-    // Exposición (para todos)
-    if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
-      advanced.push({ exposureMode: 'continuous' });
+    if (caps.focusMode && caps.focusMode.includes('continuous')) {
+      advanced.push({ focusMode: 'continuous' });
+    } else if (caps.focusMode && caps.focusMode.includes('single-shot')) {
+      advanced.push({ focusMode: 'single-shot' });
     }
 
-    // 🔍 Zoom: ahora SIEMPRE mostramos barra en iOS
-    if (IS_IOS) {
-      setZoomSupported(true); // 👈 fuerza mostrar el slider en iPhone/iPad
-      if (caps.zoom) {
-        const base = longRange ? 2.4 : 1.2;
-        const initial = Math.min(
-          Math.max(base, caps.zoom.min ?? 1),
-          caps.zoom.max ?? base
-        );
-        advanced.push({ zoom: initial });
-        setZoomRange({
-          min: caps.zoom.min ?? 1,
-          max: caps.zoom.max ?? Math.max(3, initial),
-          step: caps.zoom.step ?? 0.1,
-          value: initial
-        });
-      } else {
-        // Sin soporte nativo de zoom: usamos rango fijo 1–3 para zoom digital
-        setZoomRange({ min: 1, max: 3, step: 0.1, value: 1 });
-      }
+    // 🔍 Zoom solo en iOS
+    if (IS_IOS && caps.zoom) {
+      const base = longRange ? 2.4 : 1.2;
+      const initial = Math.min(
+        Math.max(base, caps.zoom.min ?? 1),
+        caps.zoom.max ?? base
+      );
+      advanced.push({ zoom: initial });
+      setZoomSupported(true);
+      setZoomRange({
+        min: caps.zoom.min ?? 1,
+        max: caps.zoom.max ?? Math.max(3, initial),
+        step: caps.zoom.step ?? 0.1,
+        value: initial
+      });
     } else {
       setZoomSupported(false);
       setZoomRange({ min: 1, max: 1, step: 0.1, value: 1 });
+    }
+
+    if (caps.exposureMode && caps.exposureMode.includes('continuous')) {
+      advanced.push({ exposureMode: 'continuous' });
     }
 
     // Torch (state) se mantiene, pero no hay UI; no afecta Android
@@ -455,70 +440,6 @@ export default function Scan() {
           });
         } catch {}
       };
-    }
-  }
-
-  // 🎯 Botón / acción para reenfocar al centro
-  async function handleRefocusCenter() {
-    try {
-      const video = document.querySelector('#reader video');
-      const track = camTrack;
-      if (!video || !track?.applyConstraints) return;
-
-      const caps = track.getCapabilities ? track.getCapabilities() : {};
-      const advanced = [];
-
-      if (caps.pointsOfInterest) {
-        // Enfocar al centro de la imagen
-        advanced.push({
-          pointsOfInterest: [{ x: 0.5, y: 0.5 }],
-          focusMode: 'single-shot'
-        });
-      } else if (caps.focusMode && caps.focusMode.includes('single-shot')) {
-        // Dispara un enfoque single-shot si no hay POI
-        advanced.push({ focusMode: 'single-shot' });
-      }
-
-      if (!advanced.length) return;
-
-      await track.applyConstraints({ advanced });
-    } catch (e) {
-      console.warn('Refocus error:', e);
-    }
-  }
-
-  // 🧭 Cambio de zoom desde la barra
-  async function handleZoomChange(e) {
-    const v = parseFloat(e.target.value);
-    setZoomRange((z) => ({ ...z, value: v }));
-
-    try {
-      const track = camTrack;
-      if (!track) {
-        // fallback solo visual
-        const video = document.querySelector('#reader video');
-        if (video) {
-          video.style.transform = `scale(${v})`;
-          video.style.transformOrigin = 'center center';
-        }
-        return;
-      }
-
-      const caps = track.getCapabilities ? track.getCapabilities() : {};
-
-      if (caps.zoom && track.applyConstraints) {
-        // zoom nativo de la cámara
-        await track.applyConstraints({ advanced: [{ zoom: v }] });
-      } else {
-        // zoom digital por CSS
-        const video = document.querySelector('#reader video');
-        if (video) {
-          video.style.transform = `scale(${v})`;
-          video.style.transformOrigin = 'center center';
-        }
-      }
-    } catch {
-      // ignorar errores silenciosamente
     }
   }
 
@@ -682,47 +603,48 @@ export default function Scan() {
       aria-label="Escanear o ingresar código"
     >
       {/* 🔹 BLOQUE ENTRE LOGO (HEADER) Y CÁMARA */}
-      <div className="tasa-wrapper">
-        <div className="tasa-card card">
-          <div className="tasa-card__left">
-            <span className="tasa-card__icon">$</span>
-            <div className="tasa-card__text">
-              <span className="tasa-card__label">Tasa del Dólar</span>
+<div className="tasa-wrapper">
+  <div className="tasa-card card">
+    <div className="tasa-card__left">
+      <span className="tasa-card__icon">$</span>
+      <div className="tasa-card__text">
+        <span className="tasa-card__label">Tasa del Dólar</span>
 
-              {/* Fecha o mensajes debajo */}
-              {!tasaLoading && !tasaError && tasaDetal && (
-                <span className="tasa-card__date">
-                  {(tasaDetal.fecha || '').split(' ')[0]}
-                </span>
-              )}
-              {tasaLoading && (
-                <span className="tasa-card__date">Cargando tasa...</span>
-              )}
-              {!tasaLoading && tasaError && (
-                <span className="tasa-card__date tasa-card__date--error">
-                  {tasaError}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="tasa-card__right">
-            {/* Valor */}
-            {!tasaLoading && !tasaError && tasaDetal && (
-              <>
-                <span className="tasa-card__trend"></span>
-                <span className="tasa-card__value">
-                  {Number(tasaDetal.valor).toFixed(2)}
-                </span>
-              </>
-            )}
-            {tasaLoading && <span className="tasa-card__value">···</span>}
-            {!tasaLoading && tasaError && (
-              <span className="tasa-card__value">—</span>
-            )}
-          </div>
-        </div>
+        {/* Fecha o mensajes debajo */}
+        {!tasaLoading && !tasaError && tasaDetal && (
+          <span className="tasa-card__date">
+            {(tasaDetal.fecha || '').split(' ')[0]}
+          </span>
+        )}
+        {tasaLoading && (
+          <span className="tasa-card__date">Cargando tasa...</span>
+        )}
+        {!tasaLoading && tasaError && (
+          <span className="tasa-card__date tasa-card__date--error">
+            {tasaError}
+          </span>
+        )}
       </div>
+    </div>
+
+    <div className="tasa-card__right">
+      {/* Valor */}
+      {!tasaLoading && !tasaError && tasaDetal && (
+        <>
+          <span className="tasa-card__trend"></span>
+          <span className="tasa-card__value">
+            {Number(tasaDetal.valor).toFixed(2)}
+          </span>
+        </>
+      )}
+      {tasaLoading && <span className="tasa-card__value">···</span>}
+      {!tasaLoading && tasaError && (
+        <span className="tasa-card__value">—</span>
+      )}
+    </div>
+  </div>
+</div>
+
 
       <div className="scan__grid">
         {/* VISOR */}
@@ -745,17 +667,10 @@ export default function Scan() {
           </div>
 
           <div className="controls viewer__controls">
-            <label className="visualmente-hidden" htmlFor="cameraSelect">
-              Cámara
-            </label>
-            <select
-              id="cameraSelect"
-              ref={selectRef}
-              onChange={handleChangeCamera}
-              title="Cámara"
-            />
+            <label className="visualmente-hidden" htmlFor="cameraSelect">Cámara</label>
+            <select id="cameraSelect" ref={selectRef} onChange={handleChangeCamera} title="Cámara" />
 
-            {/* 🔍 Barra de zoom SIEMPRE en iOS */}
+            {/* 🔍 Zoom SOLO en iOS */}
             {IS_IOS && zoomSupported && (
               <input
                 type="range"
@@ -763,23 +678,15 @@ export default function Scan() {
                 max={zoomRange.max}
                 step={zoomRange.step}
                 value={zoomRange.value}
-                onChange={handleZoomChange}
+                onChange={async (e) => {
+                  const v = parseFloat(e.target.value);
+                  setZoomRange(z => ({ ...z, value: v }));
+                  try { await camTrack?.applyConstraints({ advanced: [{ zoom: v }] }); } catch {}
+                }}
                 style={{ width: 140, marginLeft: 8 }}
                 aria-label="Zoom"
                 title="Zoom"
               />
-            )}
-
-            {/* 🎯 Botón de ajuste de enfoque en iOS */}
-            {IS_IOS && (
-              <button
-                type="button"
-                className="btn"
-                style={{ marginLeft: 8 }}
-                onClick={handleRefocusCenter}
-              >
-                Ajustar enfoque
-              </button>
             )}
           </div>
         </div>
