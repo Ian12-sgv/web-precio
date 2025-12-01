@@ -11,7 +11,7 @@ function Header() {
             {/* Logo negro SOLO en dark mode */}
             <source
               media="(prefers-color-scheme: dark)"
-              srcSet="/svg/logo-black.png" /* usa tu ruta real */
+              srcSet="/svg/logo-black.jpg" /* usa tu ruta real */
             />
             {/* Fallback (tema claro): logo blanco */}
             <img

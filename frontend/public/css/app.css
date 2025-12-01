@@ -2,9 +2,9 @@
 :root{
   color-scheme: light dark;
   /* LIGHT */
-  --bg:#F7F7F7;
-  --bg-grad1:#F7F7F7;
-  --bg-grad2:#F7F7F7;
+  --bg:#ffffff;
+  --bg-grad1:#ffffff;
+  --bg-grad2:#ffffff;
   --card:#ffffff;
   --surface:#f7f8fb;
   --text:#0b0c0f;
@@ -20,9 +20,9 @@
 
 @media (prefers-color-scheme: dark){
   :root{
-    --bg:#0b0c0f;
-    --bg-grad1:#0b0c0f;
-    --bg-grad2:#0b0c0f;
+    --bg:#000000;
+    --bg-grad1:#000000;
+    --bg-grad2:#000000;
     --card:#12141a;
     --surface:#161922;
     --text:#e7e9ee;
