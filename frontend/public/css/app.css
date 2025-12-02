@@ -389,7 +389,7 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 .brand-ticker__track {
   display: flex;
   align-items: center;
-  gap: 2.5rem;
+  gap: 1rem;
   width: max-content;
   animation: brandTicker 40s linear infinite;
 }
