@@ -624,7 +624,11 @@ if (IS_IOS) {
       role="region"
       aria-label="Escanear o ingresar código"
     >
-    <h1>hola</h1>
+    <div className="scan__header">
+        <h1>
+          ¡Consulta Tus Precios <span aria-hidden="true">👇</span>!
+        </h1>
+      </div>
       {/* 🔹 BLOQUE ENTRE LOGO (HEADER) Y CÁMARA */}
 <div className="tasa-wrapper">
   <div className="tasa-card card">
