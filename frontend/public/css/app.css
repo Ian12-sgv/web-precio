@@ -425,4 +425,8 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
   .brand-ticker {
     background: #000000;
   }
+
+  .brand-ticker__img {
+    height: 50px;  /* 👈 aquí agrandas SOLO los -black, porque solo se usan en oscuro */
+  }
 }
