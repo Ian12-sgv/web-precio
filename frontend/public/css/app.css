@@ -373,3 +373,56 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
     font-size: 0.95rem;
   }
 }
+
+/* ====== Carrusel de marcas tipo anuncio de noticias ====== */
+
+.brand-ticker {
+  width: 100%;
+  overflow: hidden;
+  /*border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding-block: 0.35rem;
+  margin-top: 0.25rem;*/
+  background: #ffffff;   /* tema claro: blanco */
+}
+
+.brand-ticker__track {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+  width: max-content;
+  animation: brandTicker 40s linear infinite;
+}
+
+.brand-ticker__item {
+  flex: 0 0 auto;
+}
+
+.brand-ticker__img {
+  /*height: 28px;*/
+  display: block;
+}
+
+/* Animación: se mueve de derecha a izquierda muy lento */
+@keyframes brandTicker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Opcional: en pantallas pequeñas, logos un poco más chicos */
+@media (max-width: 600px) {
+  .brand-ticker__img {
+    height: 22px;
+  }
+}
+
+/* Tema oscuro: fondo negro */
+@media (prefers-color-scheme: dark) {
+  .brand-ticker {
+    background: #000000;
+  }
+}
