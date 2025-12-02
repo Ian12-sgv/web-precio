@@ -26,7 +26,7 @@ export default function BrandTicker() {
             {/* En dark mode usas el -black */}
             <source
               media="(prefers-color-scheme: dark)"
-              srcSet={`/svg/${brand.key}-black.svg`}
+              srcSet={`/svg/${brand.key}-black.png`}
             />
             {/* Fallback (tema claro): versión -white */}
             <img

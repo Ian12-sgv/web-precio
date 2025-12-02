@@ -399,7 +399,7 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 }
 
 .brand-ticker__img {
-  /*height: 28px;*/
+  height: 50px;
   display: block;
 }
 
@@ -416,7 +416,7 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 /* Opcional: en pantallas pequeñas, logos un poco más chicos */
 @media (max-width: 600px) {
   .brand-ticker__img {
-    height: 22px;
+    height: 50px;
   }
 }
 
