@@ -392,7 +392,7 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 .brand-ticker__track {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0rem;
   width: max-content;
   animation: brandTicker 40s linear infinite;
 }
@@ -420,7 +420,7 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
 /* Opcional: en pantallas pequeñas, logos un poco más chicos */
 @media (max-width: 600px) {
   .brand-ticker__img {
-    height: 50px;
+    height: 80px;
   }
 }
 
@@ -431,6 +431,6 @@ tbody tr:hover{ background: color-mix(in srgb, var(--text) 4%, transparent) }
   }
 
   .brand-ticker__img {
-    height: 50px;  /* 👈 aquí agrandas SOLO los -black, porque solo se usan en oscuro */
+    height: 80px;  /* 👈 aquí agrandas SOLO los -black, porque solo se usan en oscuro */
   }
 }
