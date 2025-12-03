@@ -626,7 +626,7 @@ if (IS_IOS) {
     >
     <div className="scan__header">
         <h1>
-          ¡Escanea y consulta tus precios <span aria-hidden="true">👇</span>!
+          ¡Escanea y consulta nuestros precios <span aria-hidden="true">👇</span>!
         </h1>
       </div>
       {/* 🔹 BLOQUE ENTRE LOGO (HEADER) Y CÁMARA */}
