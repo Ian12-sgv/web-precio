@@ -30,7 +30,7 @@ export default function BrandTicker() {
             />
             {/* Fallback (tema claro): versión -white */}
             <img
-              src={`/svg/${brand.key}-white.svg`}
+              src={`/svg/${brand.key}-white.png`}
               alt={brand.label}
               className="brand-ticker__img"
               loading="lazy"
