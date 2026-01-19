@@ -21,11 +21,11 @@
 
 @media (prefers-color-scheme: dark){
   :root{
-    --bg: #0b1020;
+    --bg: #000;
     --fg: #e5e7eb;       /* gray-200 */
     --muted: #9aa5b1;
     --border: #2a3342;
-    --card-bg: #12182a;
+    --card-bg: #000;
     --accent: #6ea8fe;
     --primary:#e54646;
     --primary-hover:#f05a5a;
@@ -53,7 +53,7 @@ body{
 .wrap{
   max-width: 900px;
   margin: 16px auto;
-  padding: 0 16px;
+  
 }
 
 /* Tipografía y links */
@@ -65,10 +65,10 @@ a:hover{ text-decoration: underline; }
 /* Tarjeta */
 .card{
   background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 16px;
+ /* border: 1px solid var(--border);
+  border-radius: 16px;*/
   padding: 16px;
-  box-shadow: var(--shadow);
+  /*box-shadow: var(--shadow);*/
   max-width: 900px;
 }
 
@@ -112,10 +112,10 @@ a:hover{ text-decoration: underline; }
 .d-btn-primary:hover{ background: var(--primary-hover); }
 
 /* Chips copiables */
-.d-chips{ display:flex; gap:8px; flex-wrap:wrap; margin: 6px 0 10px; }
+.d-chips{ display:flex; gap:15px; flex-wrap:wrap; margin: 6px 0 20px; }
 .d-chip{
   display:inline-flex; align-items:center; gap:8px;
-  border:1px solid var(--border); border-radius:999px; padding:6px 10px;
+  border:1px solid var(--border); border-radius:10%; padding:6px 10px;
   background: color-mix(in srgb, var(--fg) 4%, transparent);
 }
 .d-chip-ok{ border-color: color-mix(in srgb, var(--ok) 60%, transparent); background: color-mix(in srgb, var(--ok) 12%, transparent); }
@@ -130,14 +130,13 @@ a:hover{ text-decoration: underline; }
 /* Grid de atributos (clave/valor) */
 .d-grid{
   display:grid;
-  grid-template-columns: repeat(2, minmax(0,1fr));
   gap: 10px 14px;
-  margin-bottom: 8px;
+  margin-bottom: 20px;
 }
 @media (max-width: 560px){
   .d-grid{ grid-template-columns: 1fr; }
 }
-.d-kv{ display:grid; grid-template-columns: 180px 1fr; gap:10px 14px; align-items: baseline; margin-bottom: 8px;}
+.d-kv{ display:grid; gap:10px 14px; align-items: baseline; margin-bottom: 8px;}
 @media (max-width: 560px){
   .d-kv{ grid-template-columns: 1fr; }
 }
