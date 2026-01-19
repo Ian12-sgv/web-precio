@@ -115,7 +115,7 @@ a:hover{ text-decoration: underline; }
 .d-chips{ display:flex; gap:15px; flex-wrap:wrap; margin: 6px 0 20px; }
 .d-chip{
   display:inline-flex; align-items:center; gap:8px;
-  border:1px solid var(--border); padding:6px 10px;
+  border:1px solid var(--border); border-radius:10px; padding:6px 10px;
   background: color-mix(in srgb, var(--fg) 4%, transparent);
 }
 .d-chip-ok{ border-color: color-mix(in srgb, var(--ok) 60%, transparent); background: color-mix(in srgb, var(--ok) 12%, transparent); }
