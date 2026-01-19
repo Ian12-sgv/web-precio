@@ -67,14 +67,14 @@ a:hover{ text-decoration: underline; }
   background: var(--card-bg);
  /* border: 1px solid var(--border);
   border-radius: 16px;*/
-  padding: 16px;
+  /*padding: 16px;*/
   /*box-shadow: var(--shadow);*/
   max-width: 900px;
 }
 
 /* ---------- Nuevo: estilos específicos Detalle (prefijo d-) ---------- */
 
-.d-card{ padding: 18px; }
+.d-card{ padding: 8px; }
 .d-title{ margin: 2px 0 10px; font-size: clamp(20px, 2.6vw, 26px); font-weight: 700; }
 
 /* Toolbar */
