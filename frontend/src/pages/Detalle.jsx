@@ -60,16 +60,32 @@ export default function Detalle() {
     if (currency === 'VES') return `Bs ${base}`;
     if (currency === 'USD') return `REF ${base}`;
 
-    // por si algún día usas otro currency
     return base;
   };
 
   const precioDetalVEF = useMemo(
-    () => item ? fmtCurrency(item.PrecioDetal, 'VES') : '',
+    () => (item ? fmtCurrency(item.PrecioDetal, 'VES') : ''),
     [item]
   );
+
   const costoUSD = useMemo(
-    () => item ? fmtCurrency(item.CostoInicial, 'USD') : '',
+    () => (item ? fmtCurrency(item.CostoInicial, 'USD') : ''),
+    [item]
+  );
+
+  // ✅ Promo: mostrar PrecioPromocion SOLO si Promocion == 1 (o true/"1")
+  const promoActiva = useMemo(() => {
+  const v = item?.Promocion;
+  if (v == null) return false;
+  if (v === true) return true;
+
+  const s = String(v).trim().toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes' || s === 'y' || s === 'on';
+}, [item]);
+
+
+  const precioPromoVEF = useMemo(
+    () => (item ? fmtCurrency(item.PrecioPromocion, 'VES') : ''),
     [item]
   );
 
@@ -154,9 +170,19 @@ export default function Detalle() {
           <div className="d-kv">
             <div className="d-v">{costoUSD}</div>
           </div>
+
           <div className="d-kv">
             <div className="d-v">{precioDetalVEF}</div>
           </div>
+
+          {/* ✅ Precio promoción solo si promoActiva */}
+          {promoActiva && item?.PrecioPromocion != null && item?.PrecioPromocion !== '' && (
+  <div className="d-kv">
+    <div className="d-k">Precio promoción</div>
+    <div className="d-v">{precioPromoVEF}</div>
+  </div>
+)}
+
 
           {hasPrecioMayor && (
             <div className="d-kv">

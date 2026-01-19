@@ -107,7 +107,7 @@ app.use((err, _req, res, _next) => {
 });
 
 /* Arranque: PRIVADO en loopback (Caddy lo expone por 443) */
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 6000;
 app.listen(port, '127.0.0.1', () => {
   console.log(`API escuchando en http://127.0.0.1:${port}`);
 });
