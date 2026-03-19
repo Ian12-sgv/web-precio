@@ -25,10 +25,11 @@ const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 // Promoción: acepta 1/'1'/true, etc.
 const isPromoActive = (row) => {
-  const v = row.Promocion ?? row.promocion ?? row.PROMOCION;
+  const v = row.PromocionActiva ?? row.promocionActiva ?? row.PROMOCIONACTIVA;
   const n = toNum(v);
   return n === 1 || v === true;
 };
+
 
 const getPromoPrice = (row) => {
   return row.PrecioPromocion ?? row.precioPromocion ?? row.precio_promocion ?? row.PRECIOPROMOCION;
@@ -54,15 +55,36 @@ module.exports.buscar = async (req, res, next) => {
     // Promocion y PrecioPromocion.
     // Si tus columnas se llaman distinto, podemos hacer alias:
     //   ISNULL(promocion,0) AS Promocion, precio_promocion AS PrecioPromocion
-    const selectCols = `
-      Referencia,
-      Nombre,
-      PrecioDetal,
-      CostoInicial,
-      CAST(ISNULL(Promocion, 0) AS int) AS Promocion,
-      PrecioPromocion,
-      ${BARCODE_COL} AS CodigoBarra
-    `;
+    // OJO: esta versión requiere que existan en dbo.INVENTARIO:
+// FechaInicial, FechaFinal, Promocion, PrecioPromocion
+
+const selectCols = `
+  Referencia,
+  Nombre,
+  PrecioDetal,
+  CostoInicial,
+
+  CAST(ISNULL(Promocion, 0) AS int) AS PromocionStatus,
+
+  CAST(
+    CASE
+      WHEN ISNULL(Promocion, 0) = 1
+       AND CONVERT(date, GETDATE()) BETWEEN CONVERT(date, FechaInicial) AND CONVERT(date, FechaFinal)
+      THEN 1 ELSE 0
+    END
+  AS int) AS PromocionActiva,
+
+  CASE
+    WHEN ISNULL(Promocion, 0) = 1
+     AND CONVERT(date, GETDATE()) BETWEEN CONVERT(date, FechaInicial) AND CONVERT(date, FechaFinal)
+    THEN PrecioPromocion
+    ELSE NULL
+  END AS PrecioPromocion,
+
+  ${BARCODE_COL} AS CodigoBarra
+`;
+
+
 
     if (barcode) {
       modo = 'barcode';
